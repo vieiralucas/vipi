@@ -1,0 +1,12 @@
+{
+  "name": "lucas",
+  "version": "1.0.0",
+  "description": "Can your vim do that?",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "Lucas Vieira <vieiralucas4@gmail.com>",
+  "license": "MIT"
+}
