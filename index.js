@@ -45,6 +45,8 @@ const onKeyPressNormal = (chunk, key, store) => {
   let dx = 0
   let dy = 0
 
+  const state = store.getState()
+
   switch (key.name) {
     case 'h':
       store.dispatch({
@@ -56,13 +58,29 @@ const onKeyPressNormal = (chunk, key, store) => {
       })
       break
     case 'j':
-      store.dispatch({
-        type: 'move-cursor',
-        payload: {
-          dx: 0,
-          dy: 1,
-        },
-      })
+      if (key.shift) {
+        store.dispatch({
+          type: 'join-line',
+        })
+
+        if (state.lines[state.cursor.y]?.length > 0) {
+          store.dispatch({
+            type: 'move-cursor',
+            payload: {
+              dx: state.lines[state.cursor.y].length - state.cursor.x,
+              dy: 0,
+            },
+          })
+        }
+      } else {
+        store.dispatch({
+          type: 'move-cursor',
+          payload: {
+            dx: 0,
+            dy: 1,
+          },
+        })
+      }
       break
     case 'k':
       store.dispatch({
@@ -97,11 +115,10 @@ const onKeyPressNormal = (chunk, key, store) => {
       }
       break
     case 'o':
-      log(store.getState().cursor.y)
       store.dispatch({
         type: 'insert-line',
         payload: {
-          y: store.getState().cursor.y + (key.shift ? 0 : 1),
+          y: state.cursor.y + (key.shift ? 0 : 1),
         },
       })
 
@@ -263,6 +280,35 @@ const reducer = (state, action) => {
       ...state,
       lines,
     }
+  }
+
+  if (action.type === 'join-line') {
+    const lineA = state.lines[state.cursor.y]
+    const lineB = state.lines[state.cursor.y + 1]
+    if (lineA === undefined || lineB === undefined) {
+      return state
+    }
+
+    if (lineA !== undefined && lineB !== undefined) {
+      let newLine = lineA
+
+      if (newLine !== '' && newLine[newLine.length - 1] !== ' ') {
+        newLine += ' '
+      }
+
+      newLine += lineB
+
+      return {
+        ...state,
+        lines: [
+          ...state.lines.slice(0, state.cursor.y),
+          newLine,
+          ...state.lines.slice(state.cursor.y + 2),
+        ],
+      }
+    }
+
+    return state
   }
 
   log(`UNHANDLED ACTION ${action.type}`)
