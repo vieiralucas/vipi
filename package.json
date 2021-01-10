@@ -8,5 +8,9 @@
   },
   "keywords": [],
   "author": "Lucas Vieira <vieiralucas4@gmail.com>",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "p-queue": "^6.6.2",
+    "redux": "^4.0.5"
+  }
 }

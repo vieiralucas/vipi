@@ -1,17 +1,9 @@
 const fs = require('fs')
 const readline = require('readline')
+const redux = require('redux')
+const { default: PQueue } = require('p-queue')
 
 const { stdin, stdout } = process
-
-const state = {
-  line: 0,
-  mode: 'normal',
-  lines: [''],
-  cursor: {
-    x: 0,
-    y: 0,
-  },
-}
 
 const logFile = fs.openSync('/tmp/lucas-logs.txt', 'w')
 const log = (str) => {
@@ -25,7 +17,7 @@ const cursorTo = (x, y) =>
 
 const clearScreen = () => stdout.write('\033c')
 
-const render = async () => {
+const render = async (state) => {
   clearScreen()
 
   await cursorTo(0, stdout.rows - 1)
@@ -49,99 +41,142 @@ const render = async () => {
   await cursorTo(state.cursor.x, state.cursor.y)
 }
 
-const moveCursor = (dx, dy) => {
-  state.cursor.x = Math.min(stdout.columns, Math.max(0, state.cursor.x + dx))
-  state.cursor.y = Math.min(
-    state.lines.length - 1,
-    Math.max(0, state.cursor.y + dy)
-  )
-
-  if (state.lines[state.cursor.y] !== undefined) {
-    state.cursor.x = Math.min(
-      state.lines[state.cursor.y].length,
-      state.cursor.x
-    )
-  }
-}
-
-const insertLine = (y) => {
-  state.lines = [...state.lines.slice(0, y), '', ...state.lines.slice(y)]
-}
-
-const onKeyPressNormal = (chunk, key) => {
+const onKeyPressNormal = (chunk, key, store) => {
   let dx = 0
   let dy = 0
 
   switch (key.name) {
     case 'h':
-      dx = -1
+      store.dispatch({
+        type: 'move-cursor',
+        payload: {
+          dx: -1,
+          dy: 0,
+        },
+      })
       break
     case 'j':
-      dy = 1
+      store.dispatch({
+        type: 'move-cursor',
+        payload: {
+          dx: 0,
+          dy: 1,
+        },
+      })
       break
     case 'k':
-      dy = -1
+      store.dispatch({
+        type: 'move-cursor',
+        payload: {
+          dx: 0,
+          dy: -1,
+        },
+      })
       break
     case 'l':
-      dx = 1
+      store.dispatch({
+        type: 'move-cursor',
+        payload: {
+          dx: 1,
+          dy: 0,
+        },
+      })
       break
     case 'i':
-      state.mode = 'insert'
+      store.dispatch({
+        type: 'insert-mode',
+      })
       if (key.shift) {
-        dx = -Infinity
+        store.dispatch({
+          type: 'move-cursor',
+          payload: {
+            dx: -Infinity,
+            dy: 0,
+          },
+        })
       }
       break
     case 'o':
-      dy = key.shift ? 0 : 1
-      insertLine(state.cursor.y + dy)
-      state.mode = 'insert'
+      log(store.getState().cursor.y)
+      store.dispatch({
+        type: 'insert-line',
+        payload: {
+          y: store.getState().cursor.y + (key.shift ? 0 : 1),
+        },
+      })
+
+      store.dispatch({
+        type: 'insert-mode',
+      })
+
+      store.dispatch({
+        type: 'move-cursor',
+        payload: {
+          dx: -Infinity,
+          dy: key.shift ? 0 : 1,
+        },
+      })
       break
     case 'x':
-      const chars = state.lines[state.cursor.y].split('')
-      state.lines[state.cursor.y] = [
-        ...chars.slice(0, state.cursor.x),
-        ...chars.slice(state.cursor.x + 1),
-      ].join('')
+      store.dispatch({
+        type: 'remove-char',
+      })
       break
   }
-
-  moveCursor(dx, dy)
 }
 
 const INSERT_MODE_IGNORED_KEYS = new Set(['backspace'])
-const onKeyPressInsert = (chunk, key) => {
-  let dx = 0
-  let dy = 0
+const onKeyPressInsert = (chunk, key, store) => {
+  const state = store.getState()
 
   if (INSERT_MODE_IGNORED_KEYS.has(key.name)) {
     return
   }
 
   if (key.name === 'escape') {
-    state.mode = 'normal'
+    store.dispatch({
+      type: 'normal-mode',
+    })
     return
   }
 
   if (key.name === 'return') {
-    insertLine(state.cursor.y + 1)
-    dy = 1
+    store.dispatch({
+      type: 'insert-line',
+      payload: {
+        y: state.cursor.y + 1,
+      },
+    })
+    store.dispatch({
+      type: 'move-cursor',
+      payload: {
+        dx: 0,
+        dy: 1,
+      },
+    })
   } else {
     const input = chunk?.toString() ?? ''
     if (input.length > 0) {
-      const chars = state.lines[state.cursor.y].split('')
-      state.lines[state.cursor.y] = [
-        ...chars.slice(0, state.cursor.x),
-        input,
-        ...chars.slice(state.cursor.x),
-      ].join('')
-      dx = 1
+      store.dispatch({
+        type: 'insert-input',
+        payload: {
+          input,
+        },
+      })
+      store.dispatch({
+        type: 'move-cursor',
+        payload: {
+          dx: 1,
+          dy: 0,
+        },
+      })
     }
   }
-
-  moveCursor(dx, dy)
 }
 
-const onKeyPress = (chunk, key) => {
+const onKeyPress = (store) => (chunk, key) => {
+  const state = store.getState()
+
   log(JSON.stringify({ key, chunk }))
   if (key.ctrl && key.name === 'c') {
     process.exit(0)
@@ -149,14 +184,105 @@ const onKeyPress = (chunk, key) => {
 
   switch (state.mode) {
     case 'normal':
-      onKeyPressNormal(chunk, key)
+      onKeyPressNormal(chunk, key, store)
       break
     case 'insert':
-      onKeyPressInsert(chunk, key)
+      onKeyPressInsert(chunk, key, store)
       break
   }
+}
 
-  render()
+const reducer = (state, action) => {
+  if (action.type === 'insert-mode') {
+    return {
+      ...state,
+      mode: 'insert',
+    }
+  }
+
+  if (action.type === 'insert-input') {
+    const chars = state.lines[state.cursor.y].split('')
+    const { input } = action.payload
+
+    const lines = state.lines.slice(0)
+    lines[state.cursor.y] = [
+      ...chars.slice(0, state.cursor.x),
+      input,
+      ...chars.slice(state.cursor.x),
+    ].join('')
+
+    return {
+      ...state,
+      lines,
+    }
+  }
+
+  if (action.type === 'move-cursor') {
+    const { dx, dy } = action.payload
+    let { x, y } = state.cursor
+    x = Math.min(stdout.columns, Math.max(0, x + dx))
+    y = Math.min(state.lines.length - 1, Math.max(0, y + dy))
+
+    if (state.lines[y] !== undefined) {
+      x = Math.min(state.lines[y].length, x)
+    }
+
+    return {
+      ...state,
+      cursor: {
+        x,
+        y,
+      },
+    }
+  }
+
+  if (action.type === 'insert-line') {
+    const { y } = action.payload
+    return {
+      ...state,
+      lines: [...state.lines.slice(0, y), '', ...state.lines.slice(y)],
+    }
+  }
+
+  if (action.type === 'normal-mode') {
+    return {
+      ...state,
+      mode: 'normal',
+    }
+  }
+
+  if (action.type === 'remove-char') {
+    const chars = state.lines[state.cursor.y].split('')
+    const lines = state.lines.slice(0)
+    lines[state.cursor.y] = [
+      ...chars.slice(0, state.cursor.x),
+      ...chars.slice(state.cursor.x + 1),
+    ].join('')
+
+    return {
+      ...state,
+      lines,
+    }
+  }
+
+  log(`UNHANDLED ACTION ${action.type}`)
+
+  return state
+}
+
+const logger = ({ getState }) => (next) => (action) => {
+  log('WILL DISPATCH')
+  log(JSON.stringify(action))
+
+  // Call the next dispatch method in the middleware chain.
+  const returnValue = next(action)
+
+  log('STATE AFTER DISPATCH')
+  log(JSON.stringify(getState()))
+
+  // This will likely be the action itself, unless
+  // a middleware further in chain changed it.
+  return returnValue
 }
 
 const main = () => {
@@ -164,12 +290,32 @@ const main = () => {
     escapeCodeTimeout: 0,
   })
 
-  // keypress(stdin)
+  const store = redux.createStore(
+    reducer,
+    {
+      line: 0,
+      mode: 'normal',
+      lines: [''],
+      cursor: {
+        x: 0,
+        y: 0,
+      },
+    },
+    redux.applyMiddleware(logger)
+  )
+
+  stdin.on('keypress', onKeyPress(store))
   stdin.setRawMode(true)
 
-  stdin.on('keypress', onKeyPress)
-  stdin.setRawMode(true)
-  render()
+  const renderQueue = new PQueue({
+    concurrency: 1,
+  })
+
+  store.subscribe(() => {
+    renderQueue.add(() => render(store.getState()))
+  })
+
+  render(store.getState())
 }
 
 main()
