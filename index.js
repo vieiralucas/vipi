@@ -159,17 +159,7 @@ const onKeyPressInsert = (chunk, key, store) => {
 
   if (key.name === 'return') {
     store.dispatch({
-      type: 'insert-line',
-      payload: {
-        y: state.cursor.y + 1,
-      },
-    })
-    store.dispatch({
-      type: 'move-cursor',
-      payload: {
-        dx: 0,
-        dy: 1,
-      },
+      type: 'return',
     })
   } else {
     const input = chunk?.toString() ?? ''
@@ -255,9 +245,34 @@ const reducer = (state, action) => {
 
   if (action.type === 'insert-line') {
     const { y } = action.payload
+
     return {
       ...state,
       lines: [...state.lines.slice(0, y), '', ...state.lines.slice(y)],
+    }
+  }
+
+  if (action.type === 'return') {
+    const y = state.cursor.y
+    let currentLine = state.lines[y]
+    let newLineContent = ''
+    if (currentLine !== undefined) {
+      newLineContent = currentLine.slice(state.cursor.x)
+      currentLine = currentLine.slice(0, state.cursor.x)
+    }
+
+    return {
+      ...state,
+      cursor: {
+        x: 0,
+        y: y + 1,
+      },
+      lines: [
+        ...state.lines.slice(0, y),
+        currentLine,
+        newLineContent,
+        ...state.lines.slice(y + 1),
+      ],
     }
   }
 
