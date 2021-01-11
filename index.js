@@ -29,6 +29,9 @@ const render = async (state) => {
     case 'insert':
       stdout.write('I')
       break
+    case 'command':
+      stdout.write(`:${state.command.input}`)
+      break
   }
 
   await cursorTo(0, stdout.rows - 2)
@@ -44,10 +47,14 @@ const render = async (state) => {
     stdout.write(lines[i])
   }
 
-  await cursorTo(state.cursor.x, state.cursor.y)
+  if (state.mode === 'command') {
+    await cursorTo(state.command.cursor + 1, stdout.rows - 1)
+  } else {
+    await cursorTo(state.cursor.x, state.cursor.y)
+  }
 }
 
-const onKeyPressNormal = (chunk, key, store) => {
+const onKeyPressNormal = async (chunk, key, store) => {
   let dx = 0
   let dy = 0
 
@@ -146,10 +153,18 @@ const onKeyPressNormal = (chunk, key, store) => {
       })
       break
   }
+
+  switch (key.sequence) {
+    case ':':
+      store.dispatch({
+        type: 'command-mode',
+      })
+      break
+  }
 }
 
 const INSERT_MODE_IGNORED_KEYS = new Set(['backspace'])
-const onKeyPressInsert = (chunk, key, store) => {
+const onKeyPressInsert = async (chunk, key, store) => {
   const state = store.getState()
 
   if (INSERT_MODE_IGNORED_KEYS.has(key.name)) {
@@ -178,44 +193,114 @@ const onKeyPressInsert = (chunk, key, store) => {
         dy: 1,
       },
     })
-  } else {
-    const input = chunk?.toString() ?? ''
-    if (input.length > 0) {
-      store.dispatch({
-        type: 'insert-input',
-        payload: {
-          input,
-        },
-      })
-      store.dispatch({
-        type: 'move-cursor',
-        payload: {
-          dx: 1,
-          dy: 0,
-        },
-      })
-    }
+    return
+  }
+
+  const input = chunk?.toString() ?? ''
+  if (input.length > 0) {
+    store.dispatch({
+      type: 'insert-input',
+      payload: {
+        input,
+      },
+    })
+    store.dispatch({
+      type: 'move-cursor',
+      payload: {
+        dx: 1,
+        dy: 0,
+      },
+    })
   }
 }
 
-const onKeyPress = (store) => (chunk, key) => {
+const executeCommand = async (store) => {
+  const state = store.getState()
+  switch (state.command.input) {
+    case 'q!':
+      process.exit(0)
+      break
+  }
+
+  store.dispatch({
+    type: 'normal-mode',
+  })
+}
+
+const onKeyPressCommand = async (chunk, key, store) => {
+  if (key.name === 'escape') {
+    store.dispatch({
+      type: 'normal-mode',
+    })
+    return
+  }
+
+  if (key.name === 'return') {
+    await executeCommand(store)
+    return
+  }
+
+  const state = store.getState()
+  if (key.name === 'backspace') {
+    store.dispatch({
+      type: 'command-input',
+      payload: {
+        input: state.command.input.slice(0, -1),
+      },
+    })
+    return
+  }
+
+  const input = chunk?.toString() ?? ''
+  store.dispatch({
+    type: 'command-input',
+    payload: {
+      input: state.command.input + input,
+    },
+  })
+}
+
+const onKeyPress = async (chunk, key, store) => {
   const state = store.getState()
 
-  if (key.ctrl && key.name === 'c') {
-    process.exit(0)
-  }
+  log(JSON.stringify({ key, chunk, mode: state.mode }))
 
   switch (state.mode) {
     case 'normal':
-      onKeyPressNormal(chunk, key, store)
+      await onKeyPressNormal(chunk, key, store)
       break
     case 'insert':
-      onKeyPressInsert(chunk, key, store)
+      await onKeyPressInsert(chunk, key, store)
+      break
+    case 'command':
+      await onKeyPressCommand(chunk, key, store)
       break
   }
 }
 
 const reducer = (state, action) => {
+  if (action.type === 'command-mode') {
+    return {
+      ...state,
+      mode: 'command',
+      command: {
+        input: '',
+        cursor: 0,
+      },
+    }
+  }
+
+  if (action.type === 'command-input') {
+    const input = action.payload.input
+    return {
+      ...state,
+      command: {
+        input,
+        cursor: input.length,
+      },
+    }
+  }
+
   if (action.type === 'insert-mode') {
     return {
       ...state,
@@ -380,6 +465,10 @@ const main = () => {
     {
       yOffset: 0,
       mode: 'normal',
+      command: {
+        input: '',
+        cursor: 0,
+      },
       lines: new Array(40).fill('').map((_, i) => (i + 1).toString()),
       cursor: {
         x: 0,
@@ -389,7 +478,13 @@ const main = () => {
     redux.applyMiddleware(logger)
   )
 
-  stdin.on('keypress', onKeyPress(store))
+  const keyPressQueue = new PQueue({
+    concurrency: 1,
+  })
+
+  stdin.on('keypress', (chunk, key) => {
+    keyPressQueue.add(() => onKeyPress(chunk, key, store))
+  })
   stdin.setRawMode(true)
 
   const renderQueue = new PQueue({
