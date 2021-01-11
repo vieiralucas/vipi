@@ -17,6 +17,10 @@ const cursorTo = (x, y) =>
 
 const clearScreen = () => stdout.write('\033c')
 
+const currentLineIndex = (state) => state.cursor.y + state.yOffset
+
+const currentLine = (state) => state.lines[currentLineIndex(state)]
+
 const render = async (state) => {
   clearScreen()
 
@@ -28,10 +32,12 @@ const render = async (state) => {
   }
 
   await cursorTo(0, stdout.rows - 2)
-  stdout.write(`[No Name] - ${state.cursor.x}, ${state.cursor.y}`)
+  stdout.write(
+    `[No Name] - ${state.cursor.x + 1}, ${currentLineIndex(state) + 1}`
+  )
 
   const linesForFile = stdout.rows - 2
-  const lines = state.lines.slice(0, linesForFile)
+  const lines = state.lines.slice(state.yOffset, state.yOffset + linesForFile)
 
   for (let i = 0; i < lines.length; i++) {
     await cursorTo(0, i)
@@ -63,11 +69,11 @@ const onKeyPressNormal = (chunk, key, store) => {
           type: 'join-line',
         })
 
-        if (state.lines[state.cursor.y]?.length > 0) {
+        if (currentLine(state)?.length > 0) {
           store.dispatch({
             type: 'move-cursor',
             payload: {
-              dx: state.lines[state.cursor.y].length - state.cursor.x,
+              dx: currentLine(state).length - state.cursor.x,
               dy: 0,
             },
           })
@@ -118,7 +124,7 @@ const onKeyPressNormal = (chunk, key, store) => {
       store.dispatch({
         type: 'insert-line',
         payload: {
-          y: state.cursor.y + (key.shift ? 0 : 1),
+          y: currentLineIndex(state) + (key.shift ? 0 : 1),
         },
       })
 
@@ -159,7 +165,18 @@ const onKeyPressInsert = (chunk, key, store) => {
 
   if (key.name === 'return') {
     store.dispatch({
-      type: 'return',
+      type: 'split-line',
+      payload: {
+        lineIndex: currentLineIndex(state),
+        x: state.cursor.x,
+      },
+    })
+    store.dispatch({
+      type: 'move-cursor',
+      payload: {
+        dx: -Infinity,
+        dy: 1,
+      },
     })
   } else {
     const input = chunk?.toString() ?? ''
@@ -184,7 +201,6 @@ const onKeyPressInsert = (chunk, key, store) => {
 const onKeyPress = (store) => (chunk, key) => {
   const state = store.getState()
 
-  log(JSON.stringify({ key, chunk }))
   if (key.ctrl && key.name === 'c') {
     process.exit(0)
   }
@@ -226,16 +242,30 @@ const reducer = (state, action) => {
 
   if (action.type === 'move-cursor') {
     const { dx, dy } = action.payload
+    let yOffset = state.yOffset
     let { x, y } = state.cursor
-    x = Math.min(stdout.columns, Math.max(0, x + dx))
-    y = Math.min(state.lines.length - 1, Math.max(0, y + dy))
 
-    if (state.lines[y] !== undefined) {
-      x = Math.min(state.lines[y].length, x)
+    const line = state.lines[y + dy + yOffset]
+    const hasLine = line !== undefined
+
+    if (y + dy < 0) {
+      yOffset = Math.max(0, yOffset + dy)
+    } else if (hasLine && y + dy > stdout.rows - 3) {
+      yOffset += dy
+    }
+
+    x = Math.min(stdout.columns, Math.max(0, x + dx))
+    if (hasLine) {
+      y = Math.min(stdout.rows - 3, Math.max(0, y + dy))
+    }
+
+    if (hasLine) {
+      x = Math.min(line.length, x)
     }
 
     return {
       ...state,
+      yOffset,
       cursor: {
         x,
         y,
@@ -252,26 +282,19 @@ const reducer = (state, action) => {
     }
   }
 
-  if (action.type === 'return') {
-    const y = state.cursor.y
-    let currentLine = state.lines[y]
-    let newLineContent = ''
-    if (currentLine !== undefined) {
-      newLineContent = currentLine.slice(state.cursor.x)
-      currentLine = currentLine.slice(0, state.cursor.x)
-    }
+  if (action.type === 'split-line') {
+    const { x, lineIndex } = action.payload
+    let previousLine = state.lines[lineIndex]
+    const newLine = previousLine.slice(x)
+    previousLine = previousLine.slice(0, x)
 
     return {
       ...state,
-      cursor: {
-        x: 0,
-        y: y + 1,
-      },
       lines: [
-        ...state.lines.slice(0, y),
-        currentLine,
-        newLineContent,
-        ...state.lines.slice(y + 1),
+        ...state.lines.slice(0, lineIndex),
+        previousLine,
+        newLine,
+        ...state.lines.slice(lineIndex + 1),
       ],
     }
   }
@@ -284,7 +307,7 @@ const reducer = (state, action) => {
   }
 
   if (action.type === 'remove-char') {
-    const chars = state.lines[state.cursor.y].split('')
+    const chars = currentLine(state).split('')
     const lines = state.lines.slice(0)
     lines[state.cursor.y] = [
       ...chars.slice(0, state.cursor.x),
@@ -298,8 +321,9 @@ const reducer = (state, action) => {
   }
 
   if (action.type === 'join-line') {
-    const lineA = state.lines[state.cursor.y]
-    const lineB = state.lines[state.cursor.y + 1]
+    const index = currentLineIndex(state)
+    const lineA = currentLine(state)
+    const lineB = state.lines[index + 1]
     if (lineA === undefined || lineB === undefined) {
       return state
     }
@@ -316,9 +340,9 @@ const reducer = (state, action) => {
       return {
         ...state,
         lines: [
-          ...state.lines.slice(0, state.cursor.y),
+          ...state.lines.slice(0, index),
           newLine,
-          ...state.lines.slice(state.cursor.y + 2),
+          ...state.lines.slice(index + 2),
         ],
       }
     }
@@ -354,9 +378,9 @@ const main = () => {
   const store = redux.createStore(
     reducer,
     {
-      line: 0,
+      yOffset: 0,
       mode: 'normal',
-      lines: [''],
+      lines: new Array(40).fill('').map((_, i) => (i + 1).toString()),
       cursor: {
         x: 0,
         y: 0,
@@ -380,17 +404,3 @@ const main = () => {
 }
 
 main()
-
-//
-// console.log(stdout.isTTY)
-//
-// let columns = stdout.columns
-//
-// stdout.on('resize', () => {
-// })
-//
-// console.log(process.stdout)
-//
-// setTimeout(() => {
-//   process.exit(0)
-// }, 10000)
