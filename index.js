@@ -1,5 +1,6 @@
 const fs = require('fs')
 const readline = require('readline')
+const path = require('path')
 const redux = require('redux')
 const { default: PQueue } = require('p-queue')
 
@@ -214,11 +215,28 @@ const onKeyPressInsert = async (chunk, key, store) => {
   }
 }
 
+const saveFile = async (store, filename) => {
+  if (!filename) {
+    // TODO: Display error message
+    return
+  }
+
+  const filepath = path.resolve(process.cwd(), filename)
+  const content = store.getState().lines.join('\n')
+
+  // TODO: should this be async?
+  fs.writeFileSync(filepath, content)
+}
+
 const executeCommand = async (store) => {
   const state = store.getState()
-  switch (state.command.input) {
+  const [command, ...args] = state.command.input.split(' ')
+  switch (command) {
     case 'q!':
       process.exit(0)
+      break
+    case 'w':
+      await saveFile(store, args[0])
       break
   }
 
