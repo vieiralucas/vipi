@@ -245,19 +245,73 @@ const readFile = async (store, filename) => {
   })
 }
 
+const findInLines = (text, lines) => {
+  return lines.map((line, i) => {
+    const x = line.indexOf(text)
+    if (x >= 0) {
+      return { x, y: i }
+    }
+
+    return null
+  })
+  .find(position => position !== null)
+}
+
+const search = (text, store) => {
+  log(`SEARCH ${text}`)
+  const state = store.getState()
+  const lines = state.lines
+  const lineIndex = currentLineIndex(state)
+  const afterLines = lines.slice(lineIndex + 1)
+
+  log(JSON.stringify(afterLines, null, 2))
+  
+  let position = findInLines(text, afterLines)
+
+  if (position) {
+    store.dispatch({
+      type: 'move-cursor',
+      payload: {
+        dx: position.x - state.cursor.x,
+        dy: (position.y + lineIndex + 1) - state.cursor.y
+      }
+    })
+    return
+  }
+ 
+  position = findInLines(text, lines.slice(0, lineIndex))
+  if (position) {
+    store.dispatch({
+      type: 'move-cursor',
+      payload: {
+       dx: position.x - state.cursor.x,
+       dy: position.y - state.cursor.y
+      }
+    })
+  }
+}
+
 const executeCommand = async (store) => {
   const state = store.getState()
   const [command, ...args] = state.command.input.split(' ')
-  switch (command) {
-    case 'q!':
-      process.exit(0)
-      break
-    case 'w':
-      await saveFile(store, args[0])
-      break
-    case 'e':
-      await readFile(store, args[0])
-      break
+
+  if (command.startsWith('/')) {
+    const searchText = state.command.input.slice(1)
+    if (searchText !== '') {
+      search(searchText, store)
+    }
+  } else {
+    switch (command) {
+      case 'q!':
+        process.exit(0)
+        break
+      case 'w':
+        await saveFile(store, args[0])
+        break
+      case 'e':
+        await readFile(store, args[0])
+        break
+    }
   }
 
   store.dispatch({
