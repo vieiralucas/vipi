@@ -228,6 +228,21 @@ const saveFile = async (store, filename) => {
   fs.writeFileSync(filepath, content)
 }
 
+const readFile = async (store, filename) => {
+  if (!filename) {
+    // TODO: Display error message
+    return
+  }
+
+  const filepath = path.resolve(process.cwd(), filename)
+  const lines = fs.readFileSync(filepath).toString().split('\n')
+
+  store.dispatch({
+    type: 'set-lines',
+    payload: { lines },
+  })
+}
+
 const executeCommand = async (store) => {
   const state = store.getState()
   const [command, ...args] = state.command.input.split(' ')
@@ -237,6 +252,9 @@ const executeCommand = async (store) => {
       break
     case 'w':
       await saveFile(store, args[0])
+      break
+    case 'e':
+      await readFile(store, args[0])
       break
   }
 
@@ -297,6 +315,18 @@ const onKeyPress = async (chunk, key, store) => {
 }
 
 const reducer = (state, action) => {
+  if (action.type === 'set-lines') {
+    return {
+      ...state,
+      lines: action.payload.lines,
+      cursor: {
+        x: 0,
+        y: 0,
+      },
+      yOffset: 0,
+    }
+  }
+
   if (action.type === 'command-mode') {
     return {
       ...state,
