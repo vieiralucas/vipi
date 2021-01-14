@@ -33,7 +33,7 @@ const render = async (state) => {
       stdout.write('I')
       break
     case 'command':
-      stdout.write(`:${state.command.input}`)
+      stdout.write(`${state.command.prefix}${state.command.input}`)
       break
   }
 
@@ -159,8 +159,12 @@ const onKeyPressNormal = async (chunk, key, store) => {
 
   switch (key.sequence) {
     case ':':
+    case '/':
       store.dispatch({
         type: 'command-mode',
+        payload: {
+          prefix: key.sequence
+        }
       })
       break
   }
@@ -295,8 +299,8 @@ const executeCommand = async (store) => {
   const state = store.getState()
   const [command, ...args] = state.command.input.split(' ')
 
-  if (command.startsWith('/')) {
-    const searchText = state.command.input.slice(1)
+  if (state.command.prefix === '/') {
+    const searchText = state.command.input
     if (searchText !== '') {
       search(searchText, store)
     }
@@ -390,6 +394,7 @@ const reducer = (state, action) => {
       command: {
         input: '',
         cursor: 0,
+        prefix: action.payload.prefix
       },
     }
   }
@@ -399,6 +404,7 @@ const reducer = (state, action) => {
     return {
       ...state,
       command: {
+        ...state.command,
         input,
         cursor: input.length,
       },
@@ -572,6 +578,7 @@ const main = () => {
       command: {
         input: '',
         cursor: 0,
+        prefix: ':'
       },
       lines: new Array(40).fill('').map((_, i) => (i + 1).toString()),
       cursor: {
