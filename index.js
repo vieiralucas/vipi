@@ -359,11 +359,11 @@ const reducer = (state, action) => {
   }
 
   if (action.type === 'insert-input') {
-    const chars = state.lines[state.cursor.y].split('')
+    const chars = currentLine(state).split('')
     const { input } = action.payload
 
     const lines = state.lines.slice(0)
-    lines[state.cursor.y] = [
+    lines[currentLineIndex(state)] = [
       ...chars.slice(0, state.cursor.x),
       input,
       ...chars.slice(state.cursor.x),
@@ -380,7 +380,7 @@ const reducer = (state, action) => {
     let yOffset = state.yOffset
     let { x, y } = state.cursor
 
-    const line = state.lines[y + dy + yOffset]
+    const line = currentLine(state)
     const hasLine = line !== undefined
 
     if (y + dy < 0) {
@@ -444,7 +444,7 @@ const reducer = (state, action) => {
   if (action.type === 'remove-char') {
     const chars = currentLine(state).split('')
     const lines = state.lines.slice(0)
-    lines[state.cursor.y] = [
+    lines[currentLineIndex(state)] = [
       ...chars.slice(0, state.cursor.x),
       ...chars.slice(state.cursor.x + 1),
     ].join('')
