@@ -36,7 +36,10 @@ const render = async (state) => {
   }
 
   await cursorTo(0, stdout.rows - 2)
-  stdout.write(`[No Name] - ${state.buffer.x + 1}, ${state.buffer.y + 1}`)
+  const fileName = state.buffer.filepath
+    ? path.basename(state.buffer.filepath)
+    : '[No Name]'
+  stdout.write(`${fileName} - ${state.buffer.x + 1}, ${state.buffer.y + 1}`)
 
   const lines = buffer.linesToRender(stdout.rows - 2, state.buffer)
 
@@ -242,32 +245,13 @@ const findInLines = (text, lines) => {
 const search = (text, store) => {
   log(`SEARCH ${text}`)
   const state = store.getState()
-  const lines = state.lines
-  const lineIndex = currentLineIndex(state)
-  const afterLines = lines.slice(lineIndex + 1)
-
-  log(JSON.stringify(afterLines, null, 2))
-
-  let position = findInLines(text, afterLines)
-
+  const position = buffer.search(text, state.buffer)
   if (position) {
     store.dispatch({
       type: 'move-cursor',
       payload: {
-        dx: position.x - state.cursor.x,
-        dy: position.y + lineIndex + 1 - state.cursor.y,
-      },
-    })
-    return
-  }
-
-  position = findInLines(text, lines.slice(0, lineIndex))
-  if (position) {
-    store.dispatch({
-      type: 'move-cursor',
-      payload: {
-        dx: position.x - state.cursor.x,
-        dy: position.y - state.cursor.y,
+        dx: position.x - state.buffer.x,
+        dy: position.y - state.buffer.y,
       },
     })
   }

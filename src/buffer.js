@@ -157,6 +157,34 @@ const save = (buffer, filename) => {
   }
 }
 
+const search = (text, buffer) => {
+  const currentLine = buffer.lines[buffer.y]
+  const xPosition = currentLine.slice(buffer.x + 1).indexOf(text)
+  if (xPosition >= 0) {
+    return { x: buffer.x + 1 + xPosition, y: buffer.y }
+  }
+
+  const nextLines = buffer.lines.slice(buffer.y + 1)
+  for (let i = 0; i < nextLines.length; i++) {
+    const line = nextLines[i]
+    const xPosition = line.indexOf(text)
+    if (xPosition >= 0) {
+      return { x: xPosition, y: buffer.y + 1 + i }
+    }
+  }
+
+  const previousLines = buffer.lines.slice(0, buffer.y)
+  for (let i = 0; i < previousLines.length; i++) {
+    const line = previousLines[i]
+    const xPosition = line.indexOf(text)
+    if (xPosition >= 0) {
+      return { x: xPosition, y: i }
+    }
+  }
+
+  return null
+}
+
 module.exports = {
   empty,
   fromFile,
@@ -169,4 +197,5 @@ module.exports = {
   splitLine,
   joinLine,
   save,
+  search,
 }
