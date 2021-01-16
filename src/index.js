@@ -156,6 +156,14 @@ const onKeyPressNormal = async (chunk, key, store) => {
           }
         })
         break
+      case 'u':
+        store.dispatch({
+          type: 'scroll-screen',
+          payload: {
+            dy: Math.ceil((stdout.rows - 3) / 2) * -1
+          }
+        })
+        break
    }
    return
  }
