@@ -144,9 +144,46 @@ const onKeyPressNormal = async (chunk, key, store) => {
         type: 'remove-char',
       })
       break
+    case '0':
+      store.dispatch({
+        type: 'move-cursor',
+        payload: {
+          dx: -Infinity,
+          dy: 0
+        }
+      })
+      break
   }
 
+  if (key.ctrl) {
+    switch (key.name) {
+      case 'd':
+        store.dispatch({
+          type: 'scroll-screen',
+          payload: {
+            dy: Math.ceil((stdout.rows - 3) / 2)
+          }
+        })
+        break
+      case 'u':
+        store.dispatch({
+          type: 'scroll-screen',
+          payload: {
+            dy: Math.ceil((stdout.rows - 3) / 2) * -1
+          }
+        })
+        break
+   }
+   return
+ }
+
   switch (key.sequence) {
+    case '$':
+      store.dispatch({
+        type: 'move-cursor',
+        payload: { dx: Infinity, dy: 0 }
+      })
+      break
     case ':':
     case '/':
       store.dispatch({
@@ -391,6 +428,13 @@ const reducer = (state, action) => {
     return {
       ...state,
       buffer: buffer.move(dx, dy, stdout.rows - 3, state.buffer),
+    }
+  }
+
+  if (action.type === 'scroll-screen') {
+    return {
+      ...state,
+      buffer: buffer.scrollScreen(action.payload.dy, stdout.rows - 3, state.buffer)
     }
   }
 
