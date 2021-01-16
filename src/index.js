@@ -6,6 +6,8 @@ const path = require('path')
 const redux = require('redux')
 const { default: PQueue } = require('p-queue')
 
+const buffer = require('./buffer')
+
 const { stdin, stdout } = process
 
 const logFile = fs.openSync('/tmp/lucas-logs.txt', 'w')
@@ -20,10 +22,6 @@ const cursorTo = (x, y) =>
 
 const clearScreen = () => stdout.write('\033c')
 
-const currentLineIndex = (state) => state.cursor.y + state.yOffset
-
-const currentLine = (state) => state.lines[currentLineIndex(state)]
-
 const render = async (state) => {
   clearScreen()
 
@@ -33,17 +31,17 @@ const render = async (state) => {
       stdout.write('I')
       break
     case 'command':
-      stdout.write(`:${state.command.input}`)
+      stdout.write(`${state.command.prefix}${state.command.input}`)
       break
   }
 
   await cursorTo(0, stdout.rows - 2)
-  stdout.write(
-    `[No Name] - ${state.cursor.x + 1}, ${currentLineIndex(state) + 1}`
-  )
+  const fileName = state.buffer.filepath
+    ? path.basename(state.buffer.filepath)
+    : '[No Name]'
+  stdout.write(`${fileName} - ${state.buffer.x + 1}, ${state.buffer.y + 1}`)
 
-  const linesForFile = stdout.rows - 2
-  const lines = state.lines.slice(state.yOffset, state.yOffset + linesForFile)
+  const lines = buffer.linesToRender(stdout.rows - 2, state.buffer)
 
   for (let i = 0; i < lines.length; i++) {
     await cursorTo(0, i)
@@ -53,7 +51,8 @@ const render = async (state) => {
   if (state.mode === 'command') {
     await cursorTo(state.command.cursor + 1, stdout.rows - 1)
   } else {
-    await cursorTo(state.cursor.x, state.cursor.y)
+    const { x, y } = buffer.screenCursor(stdout.rows - 2, state.buffer)
+    await cursorTo(x, y)
   }
 }
 
@@ -78,16 +77,6 @@ const onKeyPressNormal = async (chunk, key, store) => {
         store.dispatch({
           type: 'join-line',
         })
-
-        if (currentLine(state)?.length > 0) {
-          store.dispatch({
-            type: 'move-cursor',
-            payload: {
-              dx: currentLine(state).length - state.cursor.x,
-              dy: 0,
-            },
-          })
-        }
       } else {
         store.dispatch({
           type: 'move-cursor',
@@ -134,7 +123,7 @@ const onKeyPressNormal = async (chunk, key, store) => {
       store.dispatch({
         type: 'insert-line',
         payload: {
-          y: currentLineIndex(state) + (key.shift ? 0 : 1),
+          above: key.shift,
         },
       })
 
@@ -159,8 +148,12 @@ const onKeyPressNormal = async (chunk, key, store) => {
 
   switch (key.sequence) {
     case ':':
+    case '/':
       store.dispatch({
         type: 'command-mode',
+        payload: {
+          prefix: key.sequence,
+        },
       })
       break
   }
@@ -184,10 +177,6 @@ const onKeyPressInsert = async (chunk, key, store) => {
   if (key.name === 'return') {
     store.dispatch({
       type: 'split-line',
-      payload: {
-        lineIndex: currentLineIndex(state),
-        x: state.cursor.x,
-      },
     })
     store.dispatch({
       type: 'move-cursor',
@@ -218,16 +207,12 @@ const onKeyPressInsert = async (chunk, key, store) => {
 }
 
 const saveFile = async (store, filename) => {
-  if (!filename) {
-    // TODO: Display error message
-    return
-  }
-
-  const filepath = path.resolve(process.cwd(), filename)
-  const content = store.getState().lines.join('\n')
-
-  // TODO: should this be async?
-  fs.writeFileSync(filepath, content)
+  store.dispatch({
+    type: 'set-buffer',
+    payload: {
+      buffer: buffer.save(store.getState().buffer, filename),
+    },
+  })
 }
 
 const readFile = async (store, filename) => {
@@ -236,28 +221,63 @@ const readFile = async (store, filename) => {
     return
   }
 
-  const filepath = path.resolve(process.cwd(), filename)
-  const lines = fs.readFileSync(filepath).toString().split('\n')
-
   store.dispatch({
-    type: 'set-lines',
-    payload: { lines },
+    type: 'set-buffer',
+    payload: {
+      buffer: buffer.fromFile(filename),
+    },
   })
+}
+
+const findInLines = (text, lines) => {
+  return lines
+    .map((line, i) => {
+      const x = line.indexOf(text)
+      if (x >= 0) {
+        return { x, y: i }
+      }
+
+      return null
+    })
+    .find((position) => position !== null)
+}
+
+const search = (text, store) => {
+  log(`SEARCH ${text}`)
+  const state = store.getState()
+  const position = buffer.search(text, state.buffer)
+  if (position) {
+    store.dispatch({
+      type: 'move-cursor',
+      payload: {
+        dx: position.x - state.buffer.x,
+        dy: position.y - state.buffer.y,
+      },
+    })
+  }
 }
 
 const executeCommand = async (store) => {
   const state = store.getState()
   const [command, ...args] = state.command.input.split(' ')
-  switch (command) {
-    case 'q!':
-      process.exit(0)
-      break
-    case 'w':
-      await saveFile(store, args[0])
-      break
-    case 'e':
-      await readFile(store, args[0])
-      break
+
+  if (state.command.prefix === '/') {
+    const searchText = state.command.input
+    if (searchText !== '') {
+      search(searchText, store)
+    }
+  } else {
+    switch (command) {
+      case 'q!':
+        process.exit(0)
+        break
+      case 'w':
+        await saveFile(store, args[0])
+        break
+      case 'e':
+        await readFile(store, args[0])
+        break
+    }
   }
 
   store.dispatch({
@@ -299,6 +319,10 @@ const onKeyPressCommand = async (chunk, key, store) => {
 }
 
 const onKeyPress = async (chunk, key, store) => {
+  if (key.ctrl && key.name === 'c') {
+    process.exit(0)
+  }
+
   const state = store.getState()
 
   log(JSON.stringify({ key, chunk, mode: state.mode }))
@@ -317,15 +341,10 @@ const onKeyPress = async (chunk, key, store) => {
 }
 
 const reducer = (state, action) => {
-  if (action.type === 'set-lines') {
+  if (action.type === 'set-buffer') {
     return {
       ...state,
-      lines: action.payload.lines,
-      cursor: {
-        x: 0,
-        y: 0,
-      },
-      yOffset: 0,
+      buffer: action.payload.buffer,
     }
   }
 
@@ -336,6 +355,7 @@ const reducer = (state, action) => {
       command: {
         input: '',
         cursor: 0,
+        prefix: action.payload.prefix,
       },
     }
   }
@@ -345,6 +365,7 @@ const reducer = (state, action) => {
     return {
       ...state,
       command: {
+        ...state.command,
         input,
         cursor: input.length,
       },
@@ -359,78 +380,33 @@ const reducer = (state, action) => {
   }
 
   if (action.type === 'insert-input') {
-    const chars = currentLine(state).split('')
-    const { input } = action.payload
-
-    const lines = state.lines.slice(0)
-    lines[currentLineIndex(state)] = [
-      ...chars.slice(0, state.cursor.x),
-      input,
-      ...chars.slice(state.cursor.x),
-    ].join('')
-
     return {
       ...state,
-      lines,
+      buffer: buffer.insertStr(action.payload.input, state.buffer),
     }
   }
 
   if (action.type === 'move-cursor') {
     const { dx, dy } = action.payload
-    let yOffset = state.yOffset
-    let { x, y } = state.cursor
-
-    const line = currentLine(state)
-    const hasLine = line !== undefined
-
-    if (y + dy < 0) {
-      yOffset = Math.max(0, yOffset + dy)
-    } else if (hasLine && y + dy > stdout.rows - 3) {
-      yOffset += dy
-    }
-
-    x = Math.min(stdout.columns, Math.max(0, x + dx))
-    if (hasLine) {
-      y = Math.min(stdout.rows - 3, Math.max(0, y + dy))
-    }
-
-    if (hasLine) {
-      x = Math.min(line.length, x)
-    }
-
     return {
       ...state,
-      yOffset,
-      cursor: {
-        x,
-        y,
-      },
+      buffer: buffer.move(dx, dy, stdout.rows - 3, state.buffer),
     }
   }
 
   if (action.type === 'insert-line') {
-    const { y } = action.payload
+    const { above } = action.payload
 
     return {
       ...state,
-      lines: [...state.lines.slice(0, y), '', ...state.lines.slice(y)],
+      buffer: buffer.insertLine(above, state.buffer),
     }
   }
 
   if (action.type === 'split-line') {
-    const { x, lineIndex } = action.payload
-    let previousLine = state.lines[lineIndex]
-    const newLine = previousLine.slice(x)
-    previousLine = previousLine.slice(0, x)
-
     return {
       ...state,
-      lines: [
-        ...state.lines.slice(0, lineIndex),
-        previousLine,
-        newLine,
-        ...state.lines.slice(lineIndex + 1),
-      ],
+      buffer: buffer.splitLine(state.buffer),
     }
   }
 
@@ -442,47 +418,17 @@ const reducer = (state, action) => {
   }
 
   if (action.type === 'remove-char') {
-    const chars = currentLine(state).split('')
-    const lines = state.lines.slice(0)
-    lines[currentLineIndex(state)] = [
-      ...chars.slice(0, state.cursor.x),
-      ...chars.slice(state.cursor.x + 1),
-    ].join('')
-
     return {
       ...state,
-      lines,
+      buffer: buffer.removeChar(state.buffer),
     }
   }
 
   if (action.type === 'join-line') {
-    const index = currentLineIndex(state)
-    const lineA = currentLine(state)
-    const lineB = state.lines[index + 1]
-    if (lineA === undefined || lineB === undefined) {
-      return state
+    return {
+      ...state,
+      buffer: buffer.joinLine(stdout.rows - 3, state.buffer),
     }
-
-    if (lineA !== undefined && lineB !== undefined) {
-      let newLine = lineA
-
-      if (newLine !== '' && newLine[newLine.length - 1] !== ' ') {
-        newLine += ' '
-      }
-
-      newLine += lineB
-
-      return {
-        ...state,
-        lines: [
-          ...state.lines.slice(0, index),
-          newLine,
-          ...state.lines.slice(index + 2),
-        ],
-      }
-    }
-
-    return state
   }
 
   log(`UNHANDLED ACTION ${action.type}`)
@@ -513,17 +459,13 @@ const main = () => {
   const store = redux.createStore(
     reducer,
     {
-      yOffset: 0,
       mode: 'normal',
       command: {
         input: '',
         cursor: 0,
+        prefix: ':',
       },
-      lines: new Array(40).fill('').map((_, i) => (i + 1).toString()),
-      cursor: {
-        x: 0,
-        y: 0,
-      },
+      buffer: buffer.empty(),
     },
     redux.applyMiddleware(logger)
   )
