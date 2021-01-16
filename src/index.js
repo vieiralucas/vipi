@@ -39,7 +39,7 @@ const render = async (state) => {
   const fileName = state.buffer.filepath
     ? path.basename(state.buffer.filepath)
     : '[No Name]'
-  stdout.write(`${fileName} - ${state.buffer.x + 1}, ${state.buffer.y + 1}`)
+  stdout.write(`${fileName} - ${state.buffer.y + 1}, ${state.buffer.x + 1}`)
 
   const lines = buffer.linesToRender(stdout.rows - 2, state.buffer)
 
