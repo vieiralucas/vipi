@@ -144,6 +144,15 @@ const onKeyPressNormal = async (chunk, key, store) => {
         type: 'remove-char',
       })
       break
+    case '0':
+      store.dispatch({
+        type: 'move-cursor',
+        payload: {
+          dx: -Infinity,
+          dy: 0
+        }
+      })
+      break
   }
 
   if (key.ctrl) {
