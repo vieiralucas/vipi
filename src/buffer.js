@@ -48,6 +48,19 @@ const move = (dx, dy, rows, buffer) => {
   }
 }
 
+const scrollScreen = (dy, rows, buffer) => {
+  const prevDist = buffer.y - buffer.yScroll
+  const maxScroll = Math.max(0, buffer.lines.length - rows)
+  const nextYScroll = Math.min(buffer.yScroll + dy, maxScroll)
+  const nextY = nextYScroll + prevDist
+
+  return {
+    ...buffer,
+    y: nextY,
+    yScroll: nextYScroll,
+  }
+}
+
 const linesToRender = (rows, buffer) =>
   buffer.lines.slice(buffer.yScroll, buffer.yScroll + rows)
 
@@ -193,6 +206,7 @@ module.exports = {
   empty,
   fromFile,
   move,
+  scrollScreen,
   linesToRender,
   screenCursor,
   removeChar,
