@@ -178,6 +178,12 @@ const onKeyPressNormal = async (chunk, key, store) => {
  }
 
   switch (key.sequence) {
+    case '$':
+      store.dispatch({
+        type: 'move-cursor',
+        payload: { dx: Infinity, dy: 0 }
+      })
+      break
     case ':':
     case '/':
       store.dispatch({
