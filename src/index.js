@@ -452,6 +452,8 @@ const logger = ({ getState }) => (next) => (action) => {
 }
 
 const main = () => {
+  const file = process.argv[2]
+
   readline.emitKeypressEvents(process.stdin, {
     escapeCodeTimeout: 0,
   })
@@ -465,7 +467,7 @@ const main = () => {
         cursor: 0,
         prefix: ':',
       },
-      buffer: buffer.empty(),
+      buffer: file ? buffer.fromFile(file) : buffer.empty(),
     },
     redux.applyMiddleware(logger)
   )

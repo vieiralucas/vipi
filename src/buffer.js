@@ -11,6 +11,10 @@ const empty = () => ({
 
 const fromFile = (filename) => {
   const filepath = path.resolve(process.cwd(), filename)
+  if (!fs.existsSync(filepath)) {
+    fs.writeFileSync(filepath, '')
+  }
+
   const lines = fs.readFileSync(filepath).toString().split('\n')
 
   return {
