@@ -153,6 +153,17 @@ const onKeyPressNormal = async (chunk, key, store) => {
         }
       })
       break
+     case 'g':
+       if (key.shift) {
+         store.dispatch({
+           type: 'move-cursor',
+           payload: {
+             dx: 0,
+             dy: Infinity
+           }
+         })
+       }
+       break
   }
 
   if (key.ctrl) {
