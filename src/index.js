@@ -198,7 +198,7 @@ const onKeyPressNormal = async (chunk, key, store) => {
         payload: {
           direction: 'forward',
           position: 'end',
-        }
+        },
       })
       break
   }
