@@ -90,7 +90,7 @@ const insertStr = (str, buffer) => {
   const chars = (currentLine(buffer) ?? '').split('')
 
   const lines = buffer.lines.slice(0)
-  lines[buffer.y] = [
+  lines[buffer.cursor.y] = [
     ...chars.slice(0, buffer.cursor.x),
     str,
     ...chars.slice(buffer.cursor.x),
