@@ -178,7 +178,7 @@ const save = (buffer, filename) => {
 }
 
 const search = (text, buffer) => {
-  const currentLine = buffer.lines[buffer.y]
+  const currentLine = buffer.lines[buffer.cursor.y]
   const xPosition = currentLine.slice(buffer.cursor.x + 1).indexOf(text)
   if (xPosition >= 0) {
     return { x: buffer.cursor.x + 1 + xPosition, y: buffer.cursor.y }
