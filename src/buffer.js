@@ -228,11 +228,45 @@ const nextWord = (buffer) => {
   return null
 }
 
+const charAt = (vec, buffer) => buffer.lines[vec.y][vec.x]
+
+const previousWord = (buffer) => {
+  let start = buffer.cursor.x
+  let y = buffer.cursor.y
+
+  if (start === 0) {
+    y = Math.max(0, y - 1)
+    while (buffer.lines[y].length === 0 && y > 0) {
+      y -= 1
+    }
+
+    return {
+      x: buffer.lines[y].length - 1,
+      y,
+    }
+  }
+
+  let searchText = buffer.lines[y].slice(0, start).trimEnd()
+
+  let position = -1
+  let match = null
+  const re = /\s/g
+  while ((match = re.exec(searchText)) !== null) {
+    position = match.index
+  }
+
+  return {
+    x: position + 1,
+    y,
+  }
+}
+
 module.exports = {
   empty,
   fromFile,
   move,
   nextWord,
+  previousWord,
   scrollScreen,
   linesToRender,
   screenCursor,
