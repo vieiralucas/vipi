@@ -39,7 +39,9 @@ const render = async (state) => {
   const fileName = state.buffer.filepath
     ? path.basename(state.buffer.filepath)
     : '[No Name]'
-  stdout.write(`${fileName} - ${state.buffer.y + 1}, ${state.buffer.x + 1}`)
+  stdout.write(
+    `${fileName} - ${state.buffer.cursor.y + 1}, ${state.buffer.cursor.x + 1}`
+  )
 
   const lines = buffer.linesToRender(stdout.rows - 2, state.buffer)
 
@@ -51,7 +53,7 @@ const render = async (state) => {
   if (state.mode === 'command') {
     await cursorTo(state.command.cursor + 1, stdout.rows - 1)
   } else {
-    const { x, y } = buffer.screenCursor(stdout.rows - 2, state.buffer)
+    const { x, y } = buffer.screenCursor(state.buffer)
     await cursorTo(x, y)
   }
 }
@@ -67,8 +69,10 @@ const onKeyPressNormal = async (chunk, key, store) => {
       store.dispatch({
         type: 'move-cursor',
         payload: {
-          dx: -1,
-          dy: 0,
+          delta: {
+            x: -1,
+            y: 0,
+          },
         },
       })
       break
@@ -81,8 +85,10 @@ const onKeyPressNormal = async (chunk, key, store) => {
         store.dispatch({
           type: 'move-cursor',
           payload: {
-            dx: 0,
-            dy: 1,
+            delta: {
+              x: 0,
+              y: 1,
+            },
           },
         })
       }
@@ -91,8 +97,10 @@ const onKeyPressNormal = async (chunk, key, store) => {
       store.dispatch({
         type: 'move-cursor',
         payload: {
-          dx: 0,
-          dy: -1,
+          delta: {
+            x: 0,
+            y: -1,
+          },
         },
       })
       break
@@ -100,8 +108,10 @@ const onKeyPressNormal = async (chunk, key, store) => {
       store.dispatch({
         type: 'move-cursor',
         payload: {
-          dx: 1,
-          dy: 0,
+          delta: {
+            x: 1,
+            y: 0,
+          },
         },
       })
       break
@@ -113,8 +123,10 @@ const onKeyPressNormal = async (chunk, key, store) => {
         store.dispatch({
           type: 'move-cursor',
           payload: {
-            dx: -Infinity,
-            dy: 0,
+            delta: {
+              x: -Infinity,
+              y: 0,
+            },
           },
         })
       }
@@ -134,8 +146,10 @@ const onKeyPressNormal = async (chunk, key, store) => {
       store.dispatch({
         type: 'move-cursor',
         payload: {
-          dx: -Infinity,
-          dy: key.shift ? 0 : 1,
+          delta: {
+            x: -Infinity,
+            y: key.shift ? 0 : 1,
+          },
         },
       })
       break
@@ -148,22 +162,27 @@ const onKeyPressNormal = async (chunk, key, store) => {
       store.dispatch({
         type: 'move-cursor',
         payload: {
-          dx: -Infinity,
-          dy: 0
-        }
+          delta: {
+            x: -Infinity,
+            y: 0,
+          },
+        },
       })
       break
-     case 'g':
-       if (key.shift) {
-         store.dispatch({
-           type: 'move-cursor',
-           payload: {
-             dx: 0,
-             dy: Infinity
-           }
-         })
-       }
-       break
+    case 'g':
+      if (key.shift) {
+        store.dispatch({
+          type: 'move-cursor',
+          payload: {
+            delta: {
+              x: 0,
+              y: Infinity,
+            },
+          },
+        })
+      }
+      break
+    case 'w':
   }
 
   if (key.ctrl) {
@@ -172,27 +191,32 @@ const onKeyPressNormal = async (chunk, key, store) => {
         store.dispatch({
           type: 'scroll-screen',
           payload: {
-            dy: Math.ceil((stdout.rows - 3) / 2)
-          }
+            dy: Math.ceil((stdout.rows - 3) / 2),
+          },
         })
         break
       case 'u':
         store.dispatch({
           type: 'scroll-screen',
           payload: {
-            dy: Math.ceil((stdout.rows - 3) / 2) * -1
-          }
+            dy: Math.ceil((stdout.rows - 3) / 2) * -1,
+          },
         })
         break
-   }
-   return
- }
+    }
+    return
+  }
 
   switch (key.sequence) {
     case '$':
       store.dispatch({
         type: 'move-cursor',
-        payload: { dx: Infinity, dy: 0 }
+        payload: {
+          delta: {
+            x: Infinity,
+            y: 0,
+          },
+        },
       })
       break
     case ':':
@@ -229,8 +253,10 @@ const onKeyPressInsert = async (chunk, key, store) => {
     store.dispatch({
       type: 'move-cursor',
       payload: {
-        dx: -Infinity,
-        dy: 1,
+        delta: {
+          x: -Infinity,
+          y: 1,
+        },
       },
     })
     return
@@ -247,8 +273,10 @@ const onKeyPressInsert = async (chunk, key, store) => {
     store.dispatch({
       type: 'move-cursor',
       payload: {
-        dx: 1,
-        dy: 0,
+        delta: {
+          x: 1,
+          y: 0,
+        },
       },
     })
   }
@@ -298,8 +326,7 @@ const search = (text, store) => {
     store.dispatch({
       type: 'move-cursor',
       payload: {
-        dx: position.x - state.buffer.x,
-        dy: position.y - state.buffer.y,
+        delta: vec.sub(position, state.buffer.cursor),
       },
     })
   }
@@ -435,17 +462,20 @@ const reducer = (state, action) => {
   }
 
   if (action.type === 'move-cursor') {
-    const { dx, dy } = action.payload
     return {
       ...state,
-      buffer: buffer.move(dx, dy, stdout.rows - 3, state.buffer),
+      buffer: buffer.move(action.payload.delta, stdout.rows - 3, state.buffer),
     }
   }
 
   if (action.type === 'scroll-screen') {
     return {
       ...state,
-      buffer: buffer.scrollScreen(action.payload.dy, stdout.rows - 3, state.buffer)
+      buffer: buffer.scrollScreen(
+        action.payload.dy,
+        stdout.rows - 3,
+        state.buffer
+      ),
     }
   }
 
