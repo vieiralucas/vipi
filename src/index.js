@@ -201,6 +201,15 @@ const onKeyPressNormal = async (chunk, key, store) => {
         },
       })
       break
+    case 'b':
+      store.dispatch({
+        type: 'words-motion',
+        payload: {
+          direction: 'backward',
+          position: 'start',
+        },
+      })
+      break
   }
 
   if (key.ctrl) {
@@ -509,6 +518,17 @@ const reducer = (state, action) => {
       }
     }
 
+    if (action.payload.direction === 'backward') {
+      const pos = buffer.previousWord(state.buffer)
+      return {
+        ...state,
+        buffer: buffer.move(
+          vec.sub(pos, state.buffer.cursor),
+          stdout.rows - 3,
+          state.buffer
+        ),
+      }
+    }
     return state
   }
 
