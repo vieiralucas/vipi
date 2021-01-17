@@ -149,7 +149,7 @@ const joinLine = (rows, buffer) => {
       dx = lineA.length - buffer.cursor.x
     }
 
-    return move(dx, 0, rows, {
+    return move({ x: dx, y: 0 }, rows, {
       ...buffer,
       lines: [
         ...buffer.lines.slice(0, index),
