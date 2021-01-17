@@ -192,6 +192,15 @@ const onKeyPressNormal = async (chunk, key, store) => {
         },
       })
       break
+    case 'e':
+      store.dispatch({
+        type: 'words-motion',
+        payload: {
+          direction: 'forward',
+          position: 'end',
+        }
+      })
+      break
   }
 
   if (key.ctrl) {
@@ -478,12 +487,17 @@ const reducer = (state, action) => {
   }
 
   if (action.type === 'words-motion') {
-    if (
-      action.payload.direction === 'forward' &&
-      action.payload.position === 'start'
-    ) {
-      const pos = buffer.nextWord(state.buffer)
+    if (action.payload.direction === 'forward') {
+      let pos = buffer.nextWord(state.buffer)
       if (pos) {
+        if (action.payload.position === 'end') {
+          const line = state.buffer.lines[pos.y]
+          const slice = line.slice(pos.x)
+          const nextWhite = slice.match(/\s|$/)?.index ?? 0
+
+          pos = vec.setX(pos, pos.x + nextWhite - 1)
+        }
+
         return {
           ...state,
           buffer: buffer.move(
