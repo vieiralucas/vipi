@@ -205,10 +205,34 @@ const search = (text, buffer) => {
   return null
 }
 
+const NEXT_WORD_REG = /\s\S/
+const nextWord = (buffer) => {
+  const line = currentLine(buffer)
+  const match = line.slice(buffer.cursor.x).match(NEXT_WORD_REG)
+  if (match !== null) {
+    return vec.add(buffer.cursor, { x: match.index + 1, y: 0 })
+  }
+
+  const nextLines = buffer.lines.slice(buffer.cursor.y + 1)
+  for (const [i, line] of nextLines.entries()) {
+    if (line === '' || line[0] !== ' ') {
+      return { x: 0, y: buffer.cursor.y + 1 + i }
+    }
+
+    const match = line.match(NEXT_WORD_REG)
+    if (match) {
+      return { x: match.index + 1, y: buffer.cursor.y + i + 1 }
+    }
+  }
+
+  return null
+}
+
 module.exports = {
   empty,
   fromFile,
   move,
+  nextWord,
   scrollScreen,
   linesToRender,
   screenCursor,

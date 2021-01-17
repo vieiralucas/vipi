@@ -7,6 +7,7 @@ const redux = require('redux')
 const { default: PQueue } = require('p-queue')
 
 const buffer = require('./buffer')
+const vec = require('./vector')
 
 const { stdin, stdout } = process
 
@@ -183,6 +184,14 @@ const onKeyPressNormal = async (chunk, key, store) => {
       }
       break
     case 'w':
+      store.dispatch({
+        type: 'words-motion',
+        payload: {
+          direction: 'forward',
+          position: 'start',
+        },
+      })
+      break
   }
 
   if (key.ctrl) {
@@ -466,6 +475,27 @@ const reducer = (state, action) => {
       ...state,
       buffer: buffer.move(action.payload.delta, stdout.rows - 3, state.buffer),
     }
+  }
+
+  if (action.type === 'words-motion') {
+    if (
+      action.payload.direction === 'forward' &&
+      action.payload.position === 'start'
+    ) {
+      const pos = buffer.nextWord(state.buffer)
+      if (pos) {
+        return {
+          ...state,
+          buffer: buffer.move(
+            vec.sub(pos, state.buffer.cursor),
+            stdout.rows - 3,
+            state.buffer
+          ),
+        }
+      }
+    }
+
+    return state
   }
 
   if (action.type === 'scroll-screen') {
