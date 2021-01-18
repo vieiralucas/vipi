@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 
-const fs = require('fs')
-const readline = require('readline')
-const path = require('path')
-const redux = require('redux')
-const { default: PQueue } = require('p-queue')
+import fs from 'fs'
+import readline from 'readline'
+import path from 'path'
+import redux from 'redux'
+import PQueue from 'p-queue'
 
-const buffer = require('./buffer')
-const vec = require('./vector')
+import * as buffer from './buffer'
+import * as vec from './vector'
 
 const { stdin, stdout } = process
 

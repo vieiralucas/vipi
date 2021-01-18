@@ -1,16 +1,24 @@
-const fs = require('fs')
-const path = require('path')
+import fs from 'fs'
+import path from 'path'
 
-const vec = require('./vector')
+import {Vec} from './vector'
+import * as vec from './vector'
 
-const empty = () => ({
+interface Buff {
+  lines: string[]
+  cursor: vec.Vec
+  yScroll: number
+  filepath: string | null
+}
+
+export const empty = (): Buff => ({
   lines: [''],
   cursor: vec.zero(),
   yScroll: 0,
   filepath: null,
 })
 
-const fromFile = (filename) => {
+export const fromFile = (filename: string): Buff => {
   const filepath = path.resolve(process.cwd(), filename)
   if (!fs.existsSync(filepath)) {
     fs.writeFileSync(filepath, '')
@@ -25,9 +33,9 @@ const fromFile = (filename) => {
   }
 }
 
-const currentLine = (buffer) => buffer.lines[buffer.cursor.y]
+export const currentLine = (buffer: Buff): string | null => buffer.lines[buffer.cursor.y] ?? null
 
-const move = (d, rows, buffer) => {
+export const move = (d: Vec, rows: number, buffer: Buff): Buff => {
   const nextY = Math.min(
     buffer.lines.length - 1,
     Math.max(0, buffer.cursor.y + d.y)
@@ -54,7 +62,7 @@ const move = (d, rows, buffer) => {
   }
 }
 
-const scrollScreen = (dy, rows, buffer) => {
+export const scrollScreen = (dy: number, rows: number, buffer: Buff): Buff => {
   const prevDist = buffer.cursor.y - buffer.yScroll
   const maxScroll = Math.max(0, buffer.lines.length - rows)
   const nextYScroll = Math.max(0, Math.min(buffer.yScroll + dy, maxScroll))
@@ -67,13 +75,13 @@ const scrollScreen = (dy, rows, buffer) => {
   }
 }
 
-const linesToRender = (rows, buffer) =>
+export const linesToRender = (rows: number, buffer: Buff): string[] =>
   buffer.lines.slice(buffer.yScroll, buffer.yScroll + rows)
 
-const screenCursor = (buffer) => vec.subY(buffer.cursor, buffer.yScroll)
+export const screenCursor = (buffer: Buff): Vec => vec.subY(buffer.cursor, buffer.yScroll)
 
-const removeChar = (buffer) => {
-  const chars = currentLine(buffer).split('')
+export const removeChar = (buffer: Buff): Buff => {
+  const chars = currentLine(buffer)?.split('') ?? []
   const lines = buffer.lines.slice(0)
   lines[buffer.cursor.y] = [
     ...chars.slice(0, buffer.cursor.x),
@@ -86,7 +94,7 @@ const removeChar = (buffer) => {
   }
 }
 
-const insertStr = (str, buffer) => {
+export const insertStr = (str: string, buffer: Buff): Buff => {
   const chars = (currentLine(buffer) ?? '').split('')
 
   const lines = buffer.lines.slice(0)
@@ -102,17 +110,18 @@ const insertStr = (str, buffer) => {
   }
 }
 
-const insertLine = (above, buffer) => {
+export const insertLine = (above: boolean, buffer: Buff): Buff => {
   const y = buffer.cursor.y + (above ? 0 : 1)
+
   return {
     ...buffer,
     lines: [...buffer.lines.slice(0, y), '', ...buffer.lines.slice(y)],
   }
 }
 
-const splitLine = (buffer) => {
+export const splitLine = (buffer: Buff): Buff => {
   const { x, y } = buffer.cursor
-  let previousLine = buffer.lines[y]
+  let previousLine = buffer.lines[y] ?? ''
   const newLine = previousLine.slice(x)
   previousLine = previousLine.slice(0, x)
 
@@ -127,41 +136,40 @@ const splitLine = (buffer) => {
   }
 }
 
-const joinLine = (rows, buffer) => {
+export const joinLine = (rows: number, buffer: Buff): Buff => {
   const index = buffer.cursor.y
   const lineA = currentLine(buffer)
   const lineB = buffer.lines[index + 1]
-  if (lineA === undefined || lineB === undefined) {
+  if (lineA === null || lineB === undefined) {
     return buffer
   }
 
-  if (lineA !== undefined && lineB !== undefined) {
-    let newLine = lineA
+  let newLine: string = lineA
 
-    if (newLine !== '' && newLine[newLine.length - 1] !== ' ') {
-      newLine += ' '
-    }
-
-    newLine += lineB
-
-    let dx = 0
-    if (lineA.length > 0) {
-      dx = lineA.length - buffer.cursor.x
-    }
-
-    return move({ x: dx, y: 0 }, rows, {
-      ...buffer,
-      lines: [
-        ...buffer.lines.slice(0, index),
-        newLine,
-        ...buffer.lines.slice(index + 2),
-      ],
-    })
+  if (newLine !== '' && newLine[newLine.length - 1] !== ' ') {
+    newLine += ' '
   }
+
+  newLine += lineB
+
+  let dx = 0
+  if (lineA.length > 0) {
+    dx = lineA.length - buffer.cursor.x
+  }
+
+  return move({ x: dx, y: 0 }, rows, {
+    ...buffer,
+    lines: [
+      ...buffer.lines.slice(0, index),
+      newLine,
+      ...buffer.lines.slice(index + 2),
+    ],
+  })
+  
 }
 
-const save = (buffer, filename) => {
-  filepath = filename ?? buffer.filepath
+export const save = (buffer: Buff, filename?: string) => {
+  let filepath = filename ?? buffer.filepath
   if (!filepath) {
     // TODO: Display error message
     return buffer
@@ -177,16 +185,19 @@ const save = (buffer, filename) => {
   }
 }
 
-const search = (text, buffer) => {
-  const currentLine = buffer.lines[buffer.cursor.y]
-  const xPosition = currentLine.slice(buffer.cursor.x + 1).indexOf(text)
+export const search = (text: string, buffer: Buff): Vec | null => {
+  const line = currentLine(buffer)
+  if (!line) {
+    return null
+  }
+
+  const xPosition = line.slice(buffer.cursor.x + 1).indexOf(text)
   if (xPosition >= 0) {
     return { x: buffer.cursor.x + 1 + xPosition, y: buffer.cursor.y }
   }
 
   const nextLines = buffer.lines.slice(buffer.cursor.y + 1)
-  for (let i = 0; i < nextLines.length; i++) {
-    const line = nextLines[i]
+  for (const [i, line] of nextLines.entries()) {
     const xPosition = line.indexOf(text)
     if (xPosition >= 0) {
       return { x: xPosition, y: buffer.cursor.y + 1 + i }
@@ -194,8 +205,7 @@ const search = (text, buffer) => {
   }
 
   const previousLines = buffer.lines.slice(0, buffer.cursor.y)
-  for (let i = 0; i < previousLines.length; i++) {
-    const line = previousLines[i]
+  for (const [i, line] of previousLines.entries()) {
     const xPosition = line.indexOf(text)
     if (xPosition >= 0) {
       return { x: xPosition, y: i }
@@ -206,11 +216,15 @@ const search = (text, buffer) => {
 }
 
 const NEXT_WORD_REG = /\s\S/
-const nextWord = (buffer) => {
+export const nextWord = (buffer: Buff): Vec | null => {
   const line = currentLine(buffer)
-  const match = line.slice(buffer.cursor.x).match(NEXT_WORD_REG)
-  if (match !== null) {
-    return vec.add(buffer.cursor, { x: match.index + 1, y: 0 })
+  if (line === null) {
+    return null
+  }
+
+  const index = line.slice(buffer.cursor.x).match(NEXT_WORD_REG)?.index
+  if (index !== undefined) {
+    return vec.add(buffer.cursor, { x: index + 1, y: 0 })
   }
 
   const nextLines = buffer.lines.slice(buffer.cursor.y + 1)
@@ -219,34 +233,34 @@ const nextWord = (buffer) => {
       return { x: 0, y: buffer.cursor.y + 1 + i }
     }
 
-    const match = line.match(NEXT_WORD_REG)
-    if (match) {
-      return { x: match.index + 1, y: buffer.cursor.y + i + 1 }
+    const index = line.match(NEXT_WORD_REG)?.index
+    if (index !== undefined) {
+      return { x: index + 1, y: buffer.cursor.y + i + 1 }
     }
   }
 
   return null
 }
 
-const charAt = (vec, buffer) => buffer.lines[vec.y][vec.x]
+export const charAt = (vec: Vec, buffer: Buff): string | null => buffer.lines[vec.y]?.[vec.x]??null
 
-const previousWord = (buffer) => {
+export const previousWord = (buffer: Buff): Vec => {
   let start = buffer.cursor.x
   let y = buffer.cursor.y
 
   if (start === 0) {
     y = Math.max(0, y - 1)
-    while (buffer.lines[y].length === 0 && y > 0) {
+    while (buffer.lines[y]?.length === 0 && y > 0) {
       y -= 1
     }
 
     return {
-      x: buffer.lines[y].length - 1,
+      x: (buffer.lines[y]?.length??0) - 1,
       y,
     }
   }
 
-  let searchText = buffer.lines[y].slice(0, start).trimEnd()
+  let searchText = buffer.lines[y]?.slice(0, start)?.trimEnd() ?? ''
 
   let position = -1
   let match = null
@@ -259,22 +273,4 @@ const previousWord = (buffer) => {
     x: position + 1,
     y,
   }
-}
-
-module.exports = {
-  empty,
-  fromFile,
-  move,
-  nextWord,
-  previousWord,
-  scrollScreen,
-  linesToRender,
-  screenCursor,
-  removeChar,
-  insertStr,
-  insertLine,
-  splitLine,
-  joinLine,
-  save,
-  search,
 }
