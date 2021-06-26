@@ -1,5 +1,6 @@
 extern crate termion;
 
+use std::cmp;
 use std::io::{stdin, stdout, Write};
 use termion::event::{Event, Key};
 use termion::input::TermRead;
@@ -32,7 +33,7 @@ impl State {
         write!(
             term,
             "{}",
-            termion::cursor::Goto(self.cursor.x, self.cursor.y)
+            termion::cursor::Goto(self.cursor.x + 1, self.cursor.y + 1)
         )
         .unwrap();
 
@@ -43,16 +44,23 @@ impl State {
         match evt {
             Event::Key(Key::Char('q')) => return true,
             Event::Key(Key::Char('h')) => {
-                self.cursor.x -= 1;
+                self.cursor.x = cmp::max(self.cursor.x - 1, 0);
             }
             Event::Key(Key::Char('j')) => {
-                self.cursor.y += 1;
+                self.cursor.y = cmp::min(self.cursor.y + 1, self.lines.len() as u16);
+
+                let line = &self.lines[(self.cursor.y) as usize];
+                self.cursor.x = cmp::min(self.cursor.x, (line.len() - 1) as u16);
             }
             Event::Key(Key::Char('k')) => {
-                self.cursor.y -= 1;
+                self.cursor.y = cmp::max(self.cursor.y - 1, 0);
+
+                let line = &self.lines[(self.cursor.y) as usize];
+                self.cursor.x = cmp::min(self.cursor.x, (line.len() - 1) as u16);
             }
             Event::Key(Key::Char('l')) => {
-                self.cursor.x += 1;
+                let line = &self.lines[(self.cursor.y) as usize];
+                self.cursor.x = cmp::min(self.cursor.x + 1, (line.len() - 1) as u16);
             }
             _ => {}
         }
@@ -70,8 +78,9 @@ fn main() {
             "Hello, World".to_string(),
             "Line below".to_string(),
             "Line 3".to_string(),
+            "Line four".to_string(),
         ],
-        cursor: Cursor { x: 1, y: 1 },
+        cursor: Cursor { x: 0, y: 0 },
     };
 
     state.render(&mut stdout);
