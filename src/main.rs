@@ -24,6 +24,8 @@ impl State {
             write!(term, "{}", termion::cursor::Goto(1, y)).unwrap();
         }
         write!(term, "{}", termion::cursor::Goto(self.cursor.x, self.cursor.y)).unwrap();
+
+        term.flush().unwrap();
     }
 }
 
@@ -38,7 +40,6 @@ fn main() {
 
 
     state.render(&mut stdout);
-    stdout.flush().unwrap();
 
     for c in stdin.events() {
         let evt = c.unwrap();
@@ -60,6 +61,5 @@ fn main() {
         }
 
         state.render(&mut stdout);
-        stdout.flush().unwrap();
     }
 }
