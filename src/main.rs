@@ -1,7 +1,8 @@
 extern crate termion;
 
+use std::env;
 use std::fs::File;
-use std::io::{stdin, stdout, Write};
+use std::io::{stdin, stdout, BufRead, BufReader, Write};
 use termion::event::{Event, Key};
 use termion::input::TermRead;
 use termion::raw::IntoRawMode;
@@ -166,21 +167,27 @@ fn write_debug(str: &str) {
         .expect("Failed to write debug file");
 }
 
+fn lines_from_file(file_path: &str) -> Vec<String> {
+    if let Ok(file) = File::open(file_path) {
+        let lines: Result<Vec<_>, _> = BufReader::new(file).lines().collect();
+        lines.unwrap_or_else(|_| panic!("Failed to read lines from file: {}", file_path))
+    } else {
+        File::create(file_path)
+            .unwrap_or_else(|_| panic!("Could neither open or create file: {}", file_path));
+        vec![]
+    }
+}
+
 fn main() {
     let stdin = stdin();
     let mut stdout = stdout().into_raw_mode().unwrap();
 
     let buffer = Buffer {
-        lines: vec![
-            "Hello, World".to_string(),
-            "Line below".to_string(),
-            "Line 3".to_string(),
-            "Line four".to_string(),
-            "Line 5".to_string(),
-            "Line 6".to_string(),
-            "Line 7".to_string(),
-            "Line 8".to_string(),
-        ],
+        lines: if let Some(file_path) = env::args().nth(1) {
+            lines_from_file(&file_path)
+        } else {
+            vec![]
+        },
         cursor: Vec2::default(),
         size: termion::terminal_size().unwrap().into(),
         offset: 0,
