@@ -85,7 +85,7 @@ impl Buffer {
 
         let line = &self.lines[self.cursor.y];
         if self.cursor.x >= line.len() {
-            self.cursor.x = if line.len() == 0 { 0 } else { line.len() - 1 };
+            self.cursor.x = if line.is_empty() { 0 } else { line.len() - 1 };
         }
     }
 
@@ -102,7 +102,7 @@ impl Buffer {
 
         let line = &self.lines[self.cursor.y];
         if self.cursor.x >= line.len() {
-            self.cursor.x = if line.len() == 0 { 0 } else { line.len() - 1 };
+            self.cursor.x = if line.is_empty() { 0 } else { line.len() - 1 };
         }
     }
 
@@ -119,7 +119,7 @@ impl Buffer {
             line.remove(self.cursor.x);
         }
 
-        if line.len() > 0 && self.cursor.x >= line.len() {
+        if !line.is_empty() && self.cursor.x >= line.len() {
             self.cursor.x = line.len() - 1;
         }
     }
