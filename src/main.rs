@@ -111,6 +111,17 @@ impl Buffer {
             self.cursor.x += 1;
         }
     }
+
+    fn delete_char(&mut self) {
+        let line = &mut self.lines[self.cursor.y];
+        if self.cursor.x < line.len() {
+            line.remove(self.cursor.x);
+        }
+
+        if line.len() > 0 && self.cursor.x >= line.len() {
+            self.cursor.x = line.len() - 1;
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -137,6 +148,9 @@ impl State {
             }
             Event::Key(Key::Char('l')) => {
                 self.buffer.move_cursor_right();
+            }
+            Event::Key(Key::Char('x')) => {
+                self.buffer.delete_char();
             }
             _ => {}
         }
