@@ -7,7 +7,7 @@ use termion::event::{Event, Key};
 use termion::input::TermRead;
 use termion::raw::IntoRawMode;
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, PartialEq, Eq)]
 struct Vec2 {
     x: usize,
     y: usize,
@@ -128,6 +128,63 @@ impl Buffer {
         self.cursor.x = 0;
     }
 
+    fn word_forward(&mut self) {
+        if self.lines.is_empty() {
+            return;
+        }
+
+        let mut x = self.cursor.x;
+        let mut line: Vec<char> = self.lines[self.cursor.y].chars().collect();
+
+        let mut starts_in_empty_line = false;
+        if line.is_empty() && self.cursor.y + 1 < self.lines.len() {
+            self.cursor.x = 0;
+            self.cursor.y += 1;
+            x = 0;
+            line = self.lines[self.cursor.y].chars().collect();
+            starts_in_empty_line = true;
+        }
+
+        if !starts_in_empty_line {
+            let starts_in_alphanumeric = char::is_alphanumeric(line[x]);
+
+            while (starts_in_alphanumeric && char::is_alphanumeric(line[x]))
+                || (!starts_in_alphanumeric && !char::is_alphanumeric(line[x]))
+            {
+                if x + 1 < line.len() {
+                    x += 1;
+                } else {
+                    if self.cursor.y + 1 < self.lines.len() {
+                        self.cursor.y += 1;
+                        x = 0;
+                        line = self.lines[self.cursor.y].chars().collect();
+                    }
+                    break;
+                }
+            }
+        }
+
+        if !line.is_empty() {
+            while char::is_whitespace(line[x]) {
+                if x + 1 < line.len() {
+                    x += 1;
+                } else {
+                    if self.cursor.y + 1 < self.lines.len() {
+                        self.cursor.y += 1;
+                        x = 0;
+                        line = self.lines[self.cursor.y].chars().collect();
+                    }
+
+                    if line.is_empty() {
+                        break;
+                    }
+                }
+            }
+        }
+
+        self.cursor.x = x;
+    }
+
     fn join_line(&mut self) {
         if self.cursor.y + 1 < self.lines.len() {
             if !self.lines[self.cursor.y + 1].is_empty() {
@@ -178,6 +235,9 @@ impl State {
             }
             Event::Key(Key::Char('0')) => {
                 self.buffer.move_cursor_first_character();
+            }
+            Event::Key(Key::Char('w')) => {
+                self.buffer.word_forward();
             }
             Event::Key(Key::Char('J')) => {
                 self.buffer.join_line();
@@ -239,5 +299,160 @@ fn main() {
         write_debug(&format!("cursor {:?}\n", state.buffer.cursor));
         write_debug(&format!("size {:?}\n", state.buffer.size));
         write_debug(&format!("offset {:?}\n", state.buffer.offset));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn word_forward() {
+        let mut buffer = Buffer {
+            lines: vec!["Word Forward".to_string()],
+            cursor: Vec2::default(),
+            size: Vec2::new(100, 100),
+            offset: 0,
+        };
+
+        buffer.word_forward();
+        assert_eq!(buffer.cursor, Vec2::new(5, 0));
+    }
+
+    #[test]
+    fn word_forward_space_character() {
+        let mut buffer = Buffer {
+            lines: vec![" Word Forward".to_string()],
+            cursor: Vec2::default(),
+            size: Vec2::new(100, 100),
+            offset: 0,
+        };
+
+        buffer.word_forward();
+        assert_eq!(buffer.cursor, Vec2::new(1, 0));
+    }
+
+    #[test]
+    fn word_forward_multiple_space_character() {
+        let mut buffer = Buffer {
+            lines: vec!["  Word Forward".to_string()],
+            cursor: Vec2::default(),
+            size: Vec2::new(100, 100),
+            offset: 0,
+        };
+
+        buffer.word_forward();
+        assert_eq!(buffer.cursor, Vec2::new(2, 0));
+    }
+
+    #[test]
+    fn word_forward_non_alpha_numeric_character() {
+        let mut buffer = Buffer {
+            lines: vec![";Word Forward".to_string()],
+            cursor: Vec2::default(),
+            size: Vec2::new(100, 100),
+            offset: 0,
+        };
+
+        buffer.word_forward();
+        assert_eq!(buffer.cursor, Vec2::new(1, 0));
+    }
+
+    #[test]
+    fn word_forward_multiple_non_alpha_numeric_character() {
+        let mut buffer = Buffer {
+            lines: vec![";;Word Forward".to_string()],
+            cursor: Vec2::default(),
+            size: Vec2::new(100, 100),
+            offset: 0,
+        };
+
+        buffer.word_forward();
+        assert_eq!(buffer.cursor, Vec2::new(2, 0));
+    }
+
+    #[test]
+    fn word_forward_wrap_line() {
+        let mut buffer = Buffer {
+            lines: vec!["word1".to_string(), "word2".to_string()],
+            cursor: Vec2::default(),
+            size: Vec2::new(100, 100),
+            offset: 0,
+        };
+
+        buffer.word_forward();
+        assert_eq!(buffer.cursor, Vec2::new(0, 1));
+
+        // next line starts with space
+        buffer = Buffer {
+            lines: vec!["word1".to_string(), " word2".to_string()],
+            cursor: Vec2::default(),
+            size: Vec2::new(100, 100),
+            offset: 0,
+        };
+
+        buffer.word_forward();
+        assert_eq!(buffer.cursor, Vec2::new(1, 1));
+
+        // next line is empty
+        buffer = Buffer {
+            lines: vec!["word1".to_string(), "".to_string()],
+            cursor: Vec2::default(),
+            size: Vec2::new(100, 100),
+            offset: 0,
+        };
+
+        buffer.word_forward();
+        assert_eq!(buffer.cursor, Vec2::new(0, 1));
+
+        // when current line has trailing space
+        buffer = Buffer {
+            lines: vec!["word1 ".to_string(), "word2".to_string()],
+            cursor: Vec2::default(),
+            size: Vec2::new(100, 100),
+            offset: 0,
+        };
+
+        buffer.word_forward();
+        assert_eq!(buffer.cursor, Vec2::new(0, 1));
+
+        // when current line has trailing space and next starts with space
+        buffer = Buffer {
+            lines: vec!["; ".to_string(), " word2".to_string()],
+            cursor: Vec2::default(),
+            size: Vec2::new(100, 100),
+            offset: 0,
+        };
+
+        buffer.word_forward();
+        assert_eq!(buffer.cursor, Vec2::new(1, 1));
+
+        // when current line has trailing space and next starts with space
+        buffer = Buffer {
+            lines: vec![
+                "weird ".to_string(),
+                " ".to_string(),
+                " scenario".to_string(),
+            ],
+            cursor: Vec2::default(),
+            size: Vec2::new(100, 100),
+            offset: 0,
+        };
+
+        buffer.word_forward();
+        assert_eq!(buffer.cursor, Vec2::new(1, 2));
+    }
+
+    #[test]
+    fn word_forward_wrap_line_current_line_is_empty() {
+        let mut buffer = Buffer {
+            lines: vec!["".to_string(), "word".to_string()],
+            cursor: Vec2::default(),
+            size: Vec2::new(100, 100),
+            offset: 0,
+        };
+
+        buffer.word_forward();
+        assert_eq!(buffer.cursor, Vec2::new(0, 1));
     }
 }
