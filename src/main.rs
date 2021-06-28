@@ -124,6 +124,10 @@ impl Buffer {
         }
     }
 
+    fn move_cursor_first_character(&mut self) {
+        self.cursor.x = 0;
+    }
+
     fn join_line(&mut self) {
         if self.cursor.y + 1 < self.lines.len() {
             if !self.lines[self.cursor.y + 1].is_empty() {
@@ -171,6 +175,9 @@ impl State {
             }
             Event::Key(Key::Char('x')) => {
                 self.buffer.delete_char();
+            }
+            Event::Key(Key::Char('0')) => {
+                self.buffer.move_cursor_first_character();
             }
             Event::Key(Key::Char('J')) => {
                 self.buffer.join_line();
