@@ -123,6 +123,25 @@ impl Buffer {
             self.cursor.x = line.len() - 1;
         }
     }
+
+    fn join_line(&mut self) {
+        if self.cursor.y + 1 < self.lines.len() {
+            if !self.lines[self.cursor.y + 1].is_empty() {
+                let line = self.lines[self.cursor.y].clone();
+                let next_line = self.lines[self.cursor.y + 1].clone();
+
+                if line.is_empty() {
+                    self.lines[self.cursor.y] = next_line;
+                } else {
+                    self.lines[self.cursor.y] = format!("{} {}", line, next_line);
+                }
+
+                self.cursor.x = line.len()
+            }
+
+            self.lines.remove(self.cursor.y + 1);
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -152,6 +171,9 @@ impl State {
             }
             Event::Key(Key::Char('x')) => {
                 self.buffer.delete_char();
+            }
+            Event::Key(Key::Char('J')) => {
+                self.buffer.join_line();
             }
             _ => {}
         }
@@ -198,6 +220,8 @@ fn main() {
     state.render(&mut stdout);
     for c in stdin.events() {
         let evt = c.unwrap();
+        write_debug(&format!("{:?}\n", evt));
+
         let quit = state.update(evt);
         if quit {
             break;
@@ -205,6 +229,8 @@ fn main() {
 
         state.render(&mut stdout);
 
-        write_debug(&format!("{:?}\n", state));
+        write_debug(&format!("cursor {:?}\n", state.buffer.cursor));
+        write_debug(&format!("size {:?}\n", state.buffer.size));
+        write_debug(&format!("offset {:?}\n", state.buffer.offset));
     }
 }
