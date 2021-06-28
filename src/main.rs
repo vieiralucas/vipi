@@ -215,9 +215,8 @@ impl State {
         self.buffer.render(term);
     }
 
-    fn update(&mut self, evt: Event) -> bool {
+    fn update(&mut self, evt: Event) {
         match evt {
-            Event::Key(Key::Char('q')) => return true,
             Event::Key(Key::Char('h')) => {
                 self.buffer.move_cursor_left();
             }
@@ -244,8 +243,6 @@ impl State {
             }
             _ => {}
         }
-
-        false
     }
 }
 
@@ -289,11 +286,11 @@ fn main() {
         let evt = c.unwrap();
         write_debug(&format!("{:?}\n", evt));
 
-        let quit = state.update(evt);
-        if quit {
+        if evt == Event::Key(Key::Char('q')) {
             break;
         }
 
+        state.update(evt);
         state.render(&mut stdout);
 
         write_debug(&format!("cursor {:?}\n", state.buffer.cursor));
