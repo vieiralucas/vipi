@@ -33,6 +33,13 @@ struct Buffer {
     offset: usize,
 }
 
+#[derive(PartialEq)]
+enum MoveForwardOutcome {
+    Char,
+    Line,
+    Noop,
+}
+
 impl Buffer {
     fn render(&self, term: &mut impl Write) {
         let lines = &self.lines[self.offset..];
@@ -64,6 +71,27 @@ impl Buffer {
         .unwrap();
 
         term.flush().unwrap();
+    }
+
+    fn move_forward(&mut self) -> MoveForwardOutcome {
+        let line = &self.lines[self.cursor.y];
+
+        if self.cursor.x + 1 < line.len() {
+            self.cursor.x += 1;
+            MoveForwardOutcome::Char
+        } else if self.cursor.y + 1 < self.lines.len() {
+            let is_edge = self.cursor.y - self.offset == self.size.y - 1;
+
+            self.cursor.y += 1;
+            self.cursor.x = 0;
+
+            if is_edge {
+                self.offset += 1;
+            }
+            MoveForwardOutcome::Line
+        } else {
+            MoveForwardOutcome::Noop
+        }
     }
 
     fn move_cursor_left(&mut self) {
@@ -128,111 +156,68 @@ impl Buffer {
         self.cursor.x = 0;
     }
 
+    fn is_at_whitespace(&self) -> bool {
+        let line: Vec<char> = self.lines[self.cursor.y].chars().collect();
+
+        !line.is_empty() && char::is_whitespace(line[self.cursor.x])
+    }
+
+    fn is_at_alphanumeric(&self) -> bool {
+        let line: Vec<char> = self.lines[self.cursor.y].chars().collect();
+
+        !line.is_empty() && char::is_alphanumeric(line[self.cursor.x])
+    }
+
+    fn is_at_empty_line(&self) -> bool {
+        let line: Vec<char> = self.lines[self.cursor.y].chars().collect();
+
+        line.is_empty()
+    }
+
     fn word_forward(&mut self) {
         if self.lines.is_empty() {
             return;
         }
 
-        let mut x = self.cursor.x;
-        let mut line: Vec<char> = self.lines[self.cursor.y].chars().collect();
-
-        let mut starts_in_empty_line = false;
-        if line.is_empty() && self.cursor.y + 1 < self.lines.len() {
-            self.cursor.x = 0;
-
-            let is_edge = self.cursor.y - self.offset == self.size.y - 1;
-            self.cursor.y += 1;
-            if is_edge {
-                self.offset += 1;
+        let line: Vec<char> = self.lines[self.cursor.y].chars().collect();
+        let mut moved_from_empty_line = false;
+        if line.is_empty() {
+            if self.move_forward() == MoveForwardOutcome::Noop {
+                return;
             }
 
-            x = 0;
-            line = self.lines[self.cursor.y].chars().collect();
-            starts_in_empty_line = true;
+            moved_from_empty_line = true;
         }
 
-        if !starts_in_empty_line {
-            if char::is_whitespace(line[x]) {
-                while char::is_whitespace(line[x]) {
-                    if x + 1 < line.len() {
-                        x += 1;
-                    } else {
-                        if self.cursor.y + 1 < self.lines.len() {
-                            let is_edge = self.cursor.y - self.offset == self.size.y - 1;
-                            self.cursor.y += 1;
-                            if is_edge {
-                                self.offset += 1;
-                            }
-
-                            x = 0;
-                            line = self.lines[self.cursor.y].chars().collect();
-                        }
+        if !moved_from_empty_line {
+            if self.is_at_whitespace() {
+                while self.is_at_whitespace() {
+                    if self.move_forward() != MoveForwardOutcome::Char {
                         break;
                     }
                 }
-            } else if char::is_alphanumeric(line[x]) {
-                while char::is_alphanumeric(line[x]) {
-                    if x + 1 < line.len() {
-                        x += 1;
-                    } else {
-                        if self.cursor.y + 1 < self.lines.len() {
-                            let is_edge = self.cursor.y - self.offset == self.size.y - 1;
-                            self.cursor.y += 1;
-                            if is_edge {
-                                self.offset += 1;
-                            }
-
-                            x = 0;
-                            line = self.lines[self.cursor.y].chars().collect();
-                        }
+            } else if self.is_at_alphanumeric() {
+                while self.is_at_alphanumeric() {
+                    if self.move_forward() != MoveForwardOutcome::Char {
                         break;
                     }
                 }
             } else {
-                while !char::is_alphanumeric(line[x]) {
-                    if x + 1 < line.len() {
-                        x += 1;
-                    } else {
-                        if self.cursor.y + 1 < self.lines.len() {
-                            let is_edge = self.cursor.y - self.offset == self.size.y - 1;
-                            self.cursor.y += 1;
-                            if is_edge {
-                                self.offset += 1;
-                            }
-
-                            x = 0;
-                            line = self.lines[self.cursor.y].chars().collect();
-                        }
+                while !self.is_at_alphanumeric() {
+                    if self.move_forward() != MoveForwardOutcome::Char {
                         break;
                     }
                 }
             }
         }
 
-        if !line.is_empty() {
-            while char::is_whitespace(line[x]) {
-                if x + 1 < line.len() {
-                    x += 1;
-                } else {
-                    if self.cursor.y + 1 < self.lines.len() {
-                        let is_edge = self.cursor.y - self.offset == self.size.y - 1;
-                        self.cursor.y += 1;
-                        if is_edge {
-                            self.offset += 1;
-                        }
-
-                        x = 0;
-                        line = self.lines[self.cursor.y].chars().collect();
-                    }
-
-                    if line.is_empty() {
-                        break;
-                    }
+        if !self.is_at_empty_line() {
+            while self.is_at_whitespace() {
+                if self.move_forward() == MoveForwardOutcome::Noop {
+                    break;
                 }
             }
         }
-
-        self.cursor.x = x;
     }
 
     fn join_line(&mut self) {
@@ -352,6 +337,63 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn move_forward() {
+        let mut buffer = Buffer {
+            lines: vec!["abc".to_string()],
+            cursor: Vec2::default(),
+            size: Vec2::new(100, 100),
+            offset: 0,
+        };
+
+        buffer.move_forward();
+
+        assert_eq!(buffer.cursor, Vec2::new(1, 0));
+    }
+
+    #[test]
+    fn move_forward_no_op_when_end_of_buffer() {
+        let mut buffer = Buffer {
+            lines: vec!["abc".to_string()],
+            cursor: Vec2::new(2, 0),
+            size: Vec2::new(100, 100),
+            offset: 0,
+        };
+
+        buffer.move_forward();
+
+        assert_eq!(buffer.cursor, Vec2::new(2, 0));
+    }
+
+    #[test]
+    fn move_forward_wrap_line() {
+        let mut buffer = Buffer {
+            lines: vec!["line1".to_string(), "line2".to_string()],
+            cursor: Vec2::new(4, 0),
+            size: Vec2::new(100, 100),
+            offset: 0,
+        };
+
+        buffer.move_forward();
+
+        assert_eq!(buffer.cursor, Vec2::new(0, 1));
+    }
+
+    #[test]
+    fn move_forward_wrap_line_offset() {
+        let mut buffer = Buffer {
+            lines: vec!["line1".to_string(), "line2".to_string()],
+            cursor: Vec2::new(4, 0),
+            size: Vec2::new(100, 1),
+            offset: 0,
+        };
+
+        buffer.move_forward();
+
+        assert_eq!(buffer.cursor, Vec2::new(0, 1));
+        assert_eq!(buffer.offset, 1);
+    }
 
     #[test]
     fn word_forward() {
