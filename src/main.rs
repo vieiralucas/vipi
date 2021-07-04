@@ -11,8 +11,8 @@ mod cursor_line {
     #[derive(Debug, PartialEq)]
     pub struct CursorLine {
         before: Vec<char>,
-        // first item of rest is the cursor position
-        rest: Vec<char>,
+        // first item of with_cursor is the cursor position
+        with_cursor: Vec<char>,
     }
 
     impl CursorLine {
@@ -20,7 +20,7 @@ mod cursor_line {
             if str.is_empty() {
                 return Self {
                     before: vec![],
-                    rest: vec![],
+                    with_cursor: vec![],
                 };
             }
 
@@ -31,7 +31,7 @@ mod cursor_line {
 
             Self {
                 before: str.chars().take(char_pos).collect(),
-                rest: str.chars().skip(char_pos).collect(),
+                with_cursor: str.chars().skip(char_pos).collect(),
             }
         }
 
@@ -41,16 +41,16 @@ mod cursor_line {
                 before.push(*c);
             }
 
-            let mut rest: String = String::with_capacity(self.rest.len());
-            for c in self.rest.iter() {
-                rest.push(*c);
+            let mut with_cursor: String = String::with_capacity(self.with_cursor.len());
+            for c in self.with_cursor.iter() {
+                with_cursor.push(*c);
             }
 
-            format!("{}{}", before, rest)
+            format!("{}{}", before, with_cursor)
         }
 
         pub fn len(&self) -> usize {
-            self.before.len() + self.rest.len()
+            self.before.len() + self.with_cursor.len()
         }
 
         pub fn set_x(&mut self, x: usize) {
@@ -73,7 +73,7 @@ mod cursor_line {
 
         pub fn move_left(&mut self) -> bool {
             if let Some(cursor_char) = self.before.pop() {
-                self.rest.insert(0, cursor_char);
+                self.with_cursor.insert(0, cursor_char);
                 true
             } else {
                 false
@@ -81,11 +81,11 @@ mod cursor_line {
         }
 
         pub fn move_right(&mut self) -> bool {
-            if self.rest.len() < 2 {
+            if self.with_cursor.len() < 2 {
                 false
-            } else if let Some(cursor_char) = self.rest.first() {
+            } else if let Some(cursor_char) = self.with_cursor.first() {
                 self.before.push(*cursor_char);
-                self.rest.remove(0);
+                self.with_cursor.remove(0);
                 true
             } else {
                 false
@@ -93,35 +93,35 @@ mod cursor_line {
         }
 
         pub fn delete_char(&mut self) {
-            if self.rest.is_empty() {
+            if self.with_cursor.is_empty() {
                 return;
             }
 
-            self.rest.remove(0);
+            self.with_cursor.remove(0);
 
-            if self.rest.is_empty() {
+            if self.with_cursor.is_empty() {
                 if let Some(last) = self.before.pop() {
-                    self.rest.push(last)
+                    self.with_cursor.push(last)
                 }
             }
         }
 
         pub fn is_at_whitespace(&self) -> bool {
-            self.rest
+            self.with_cursor
                 .first()
                 .map(|cursor_char| char::is_whitespace(*cursor_char))
                 .unwrap_or(false)
         }
 
         pub fn is_at_alphanumeric(&self) -> bool {
-            self.rest
+            self.with_cursor
                 .first()
                 .map(|cursor_char| char::is_alphanumeric(*cursor_char))
                 .unwrap_or(false)
         }
 
         pub fn is_empty(&self) -> bool {
-            self.rest.is_empty()
+            self.with_cursor.is_empty()
         }
     }
 
@@ -134,7 +134,7 @@ mod cursor_line {
             let cursor_line = CursorLine::from_str("", 0);
 
             assert_eq!(cursor_line.before, vec![]);
-            assert_eq!(cursor_line.rest, vec![]);
+            assert_eq!(cursor_line.with_cursor, vec![]);
         }
 
         #[test]
@@ -142,7 +142,7 @@ mod cursor_line {
             let cursor_line = CursorLine::from_str("012", 0);
 
             assert_eq!(cursor_line.before, vec![]);
-            assert_eq!(cursor_line.rest, vec!['0', '1', '2']);
+            assert_eq!(cursor_line.with_cursor, vec!['0', '1', '2']);
         }
 
         #[test]
@@ -150,7 +150,7 @@ mod cursor_line {
             let cursor_line = CursorLine::from_str("012", 1);
 
             assert_eq!(cursor_line.before, vec!['0']);
-            assert_eq!(cursor_line.rest, vec!['1', '2']);
+            assert_eq!(cursor_line.with_cursor, vec!['1', '2']);
         }
 
         #[test]
@@ -158,7 +158,7 @@ mod cursor_line {
             let cursor_line = CursorLine::from_str("012", 2);
 
             assert_eq!(cursor_line.before, vec!['0', '1']);
-            assert_eq!(cursor_line.rest, vec!['2']);
+            assert_eq!(cursor_line.with_cursor, vec!['2']);
         }
 
         #[test]
@@ -166,7 +166,7 @@ mod cursor_line {
             let cursor_line = CursorLine::from_str("012", 3);
 
             assert_eq!(cursor_line.before, vec!['0', '1']);
-            assert_eq!(cursor_line.rest, vec!['2']);
+            assert_eq!(cursor_line.with_cursor, vec!['2']);
         }
 
         #[test]
