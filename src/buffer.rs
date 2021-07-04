@@ -98,7 +98,7 @@ impl Buffer {
     }
 
     fn move_forward(&mut self) -> MoveForwardOutcome {
-        if self.cursor_line.move_right() {
+        if self.cursor_line.move_right(false) {
             MoveForwardOutcome::Char
         } else if !self.after_cursor_lines.is_empty() {
             self.move_cursor_down();
@@ -138,8 +138,8 @@ impl Buffer {
         }
     }
 
-    pub fn move_cursor_right(&mut self) {
-        self.cursor_line.move_right();
+    pub fn move_cursor_right(&mut self, allow_one_off: bool) {
+        self.cursor_line.move_right(allow_one_off);
     }
 
     pub fn delete_char(&mut self) {
@@ -204,6 +204,14 @@ impl Buffer {
 
             self.after_cursor_lines.remove(0);
         }
+    }
+
+    pub fn insert_char(&mut self, c: char) {
+        self.cursor_line.insert_char(c);
+    }
+
+    pub fn clamp_cursor(&mut self) {
+        self.cursor_line.clamp();
     }
 
     pub fn write_debug(&self) {
@@ -476,5 +484,37 @@ mod tests {
         buffer.word_forward();
         assert_eq!(buffer.cursor(), Vec2::new(0, 1));
         assert_eq!(buffer.offset, 1);
+    }
+
+    #[test]
+    fn clamp_cursor() {
+        let mut buffer = Buffer {
+            before_cursor_lines: vec![],
+            cursor_line: CursorLine::from_str("", 0),
+            after_cursor_lines: vec![],
+            size: Vec2::new(100, 1),
+            offset: 0,
+        };
+
+        buffer.insert_char('a');
+        buffer.clamp_cursor();
+
+        assert_eq!(buffer.cursor(), Vec2::new(0, 0));
+    }
+
+    #[test]
+    fn insert_char() {
+        let mut buffer = Buffer {
+            before_cursor_lines: vec![],
+            cursor_line: CursorLine::from_str("", 0),
+            after_cursor_lines: vec![],
+            size: Vec2::new(100, 1),
+            offset: 0,
+        };
+
+        buffer.insert_char('a');
+
+        assert_eq!(buffer.cursor_line.line(), "a");
+        assert_eq!(buffer.cursor(), Vec2::new(1, 0));
     }
 }

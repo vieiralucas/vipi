@@ -16,7 +16,14 @@ use cursor_line::CursorLine;
 use vec2::Vec2;
 
 #[derive(Debug)]
+enum Mode {
+    Normal,
+    Insert,
+}
+
+#[derive(Debug)]
 struct State {
+    mode: Mode,
     buffer: Buffer,
 }
 
@@ -26,32 +33,51 @@ impl State {
     }
 
     fn update(&mut self, evt: Event) {
-        match evt {
-            Event::Key(Key::Char('h')) => {
-                self.buffer.move_cursor_left();
-            }
-            Event::Key(Key::Char('j')) => {
-                self.buffer.move_cursor_down();
-            }
-            Event::Key(Key::Char('k')) => {
-                self.buffer.move_cursor_up();
-            }
-            Event::Key(Key::Char('l')) => {
-                self.buffer.move_cursor_right();
-            }
-            Event::Key(Key::Char('x')) => {
-                self.buffer.delete_char();
-            }
-            Event::Key(Key::Char('0')) => {
-                self.buffer.move_cursor_first_character();
-            }
-            Event::Key(Key::Char('w')) => {
-                self.buffer.word_forward();
-            }
-            Event::Key(Key::Char('J')) => {
-                self.buffer.join_line();
-            }
-            _ => {}
+        write_debug(&format!("{:?}", evt));
+
+        match self.mode {
+            Mode::Normal => match evt {
+                Event::Key(Key::Char('h')) => {
+                    self.buffer.move_cursor_left();
+                }
+                Event::Key(Key::Char('j')) => {
+                    self.buffer.move_cursor_down();
+                }
+                Event::Key(Key::Char('k')) => {
+                    self.buffer.move_cursor_up();
+                }
+                Event::Key(Key::Char('l')) => {
+                    self.buffer.move_cursor_right(false);
+                }
+                Event::Key(Key::Char('x')) => {
+                    self.buffer.delete_char();
+                }
+                Event::Key(Key::Char('0')) => {
+                    self.buffer.move_cursor_first_character();
+                }
+                Event::Key(Key::Char('w')) => {
+                    self.buffer.word_forward();
+                }
+                Event::Key(Key::Char('J')) => {
+                    self.buffer.join_line();
+                }
+                Event::Key(Key::Char('i')) => self.mode = Mode::Insert,
+                Event::Key(Key::Char('a')) => {
+                    self.buffer.move_cursor_right(true);
+                    self.mode = Mode::Insert;
+                }
+                _ => {}
+            },
+            Mode::Insert => match evt {
+                Event::Key(Key::Esc) => {
+                    self.buffer.clamp_cursor();
+                    self.mode = Mode::Normal;
+                }
+                Event::Key(Key::Char(c)) => {
+                    self.buffer.insert_char(c);
+                }
+                _ => {}
+            },
         }
     }
 }
@@ -78,7 +104,10 @@ fn main() {
         Buffer::from_lines(vec![])
     };
 
-    let mut state = State { buffer };
+    let mut state = State {
+        buffer,
+        mode: Mode::Normal,
+    };
 
     state.buffer.write_debug();
 

@@ -53,7 +53,7 @@ impl CursorLine {
         }
 
         while self.x() < x {
-            self.move_right();
+            self.move_right(false);
         }
     }
 
@@ -70,8 +70,8 @@ impl CursorLine {
         }
     }
 
-    pub fn move_right(&mut self) -> bool {
-        if self.with_cursor.len() < 2 {
+    pub fn move_right(&mut self, allow_one_off: bool) -> bool {
+        if !allow_one_off && self.with_cursor.len() <= 1 {
             false
         } else if let Some(cursor_char) = self.with_cursor.first() {
             self.before.push(*cursor_char);
@@ -112,6 +112,20 @@ impl CursorLine {
 
     pub fn is_empty(&self) -> bool {
         self.with_cursor.is_empty()
+    }
+
+    pub fn insert_char(&mut self, c: char) {
+        self.before.push(c);
+    }
+
+    pub fn clamp(&mut self) {
+        if !self.with_cursor.is_empty() {
+            return;
+        }
+
+        if let Some(c) = self.before.pop() {
+            self.with_cursor.insert(0, c)
+        }
     }
 }
 
@@ -175,7 +189,7 @@ mod tests {
         let is_empty = cursor_line.is_empty();
         assert_eq!(is_empty, false);
 
-        while cursor_line.move_right() {
+        while cursor_line.move_right(false) {
             let is_empty = cursor_line.is_empty();
             assert_eq!(is_empty, false);
         }
@@ -185,7 +199,7 @@ mod tests {
     fn move_right_start() {
         let mut cursor_line = CursorLine::from_str("012", 0);
 
-        let result = cursor_line.move_right();
+        let result = cursor_line.move_right(false);
 
         assert_eq!(result, true);
         assert_eq!(cursor_line, CursorLine::from_str("012", 1));
@@ -195,7 +209,7 @@ mod tests {
     fn move_right_middle() {
         let mut cursor_line = CursorLine::from_str("012", 1);
 
-        let result = cursor_line.move_right();
+        let result = cursor_line.move_right(false);
 
         assert_eq!(result, true);
         assert_eq!(cursor_line, CursorLine::from_str("012", 2));
@@ -205,10 +219,21 @@ mod tests {
     fn move_right_end() {
         let mut cursor_line = CursorLine::from_str("012", 2);
 
-        let result = cursor_line.move_right();
+        let result = cursor_line.move_right(false);
 
         assert_eq!(result, false);
         assert_eq!(cursor_line, CursorLine::from_str("012", 2));
+    }
+
+    #[test]
+    fn move_right_end_allow_one_off() {
+        let mut cursor_line = CursorLine::from_str("012", 2);
+
+        let result = cursor_line.move_right(true);
+
+        assert_eq!(result, true);
+        assert_eq!(cursor_line.before, vec!['0', '1', '2']);
+        assert_eq!(cursor_line.with_cursor, vec![]);
     }
 
     #[test]
@@ -236,5 +261,35 @@ mod tests {
         cursor_line.set_x(3);
 
         assert_eq!(cursor_line, CursorLine::from_str("012", 0));
+    }
+
+    #[test]
+    fn insert_char() {
+        let mut cursor_line = CursorLine::from_str("", 0);
+
+        cursor_line.insert_char('a');
+
+        assert_eq!(cursor_line.before, vec!['a']);
+    }
+
+    #[test]
+    fn clamp() {
+        let mut cursor_line = CursorLine::from_str("", 0);
+
+        cursor_line.insert_char('a');
+        cursor_line.clamp();
+
+        assert_eq!(cursor_line.before, vec![]);
+        assert_eq!(cursor_line.with_cursor, vec!['a']);
+    }
+
+    #[test]
+    fn clamp_no_op() {
+        let mut cursor_line = CursorLine::from_str("abc", 0);
+
+        cursor_line.clamp();
+
+        assert_eq!(cursor_line.before, vec![]);
+        assert_eq!(cursor_line.with_cursor, vec!['a', 'b', 'c']);
     }
 }
