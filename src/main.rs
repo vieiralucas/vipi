@@ -83,6 +83,12 @@ impl State {
                     self.buffer.move_cursor_right(true);
                     self.mode = Mode::Insert;
                 }
+                Event::Key(Key::Char('o')) => {
+                    self.buffer.insert_line_after_cursor("".to_string());
+                    self.buffer.move_cursor_down();
+                    self.buffer.move_cursor_first_character();
+                    self.mode = Mode::Insert;
+                }
                 Event::Key(Key::Char(':')) => {
                     self.command_line = CursorLine::from_str(":", 0);
                     self.command_line.move_right(true);

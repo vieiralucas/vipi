@@ -216,6 +216,10 @@ impl Buffer {
         self.cursor_line.clamp();
     }
 
+    pub fn insert_line_after_cursor(&mut self, line: String) {
+        self.after_cursor_lines.insert(0, line);
+    }
+
     pub fn write_debug(&self) {
         write_debug("##########################");
         write_debug(&format!(
@@ -518,5 +522,20 @@ mod tests {
 
         assert_eq!(buffer.cursor_line.line(), "a");
         assert_eq!(buffer.cursor(), Vec2::new(1, 0));
+    }
+
+    #[test]
+    fn insert_line_after_cursor() {
+        let mut buffer = Buffer {
+            before_cursor_lines: vec![],
+            cursor_line: CursorLine::from_str("", 0),
+            after_cursor_lines: vec![],
+            size: Vec2::new(100, 1),
+            offset: 0,
+        };
+
+        buffer.insert_line_after_cursor("hello".to_string());
+
+        assert_eq!(buffer.after_cursor_lines, vec!["hello"]);
     }
 }
