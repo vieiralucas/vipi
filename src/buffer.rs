@@ -1,5 +1,6 @@
 use std::fs::File;
-use std::io::{BufRead, BufReader, Write};
+use std::io::prelude::*;
+use std::io::Write;
 
 use crate::write_debug;
 use crate::CursorLine;
@@ -46,9 +47,11 @@ impl Buffer {
     }
 
     pub fn from_file_path(file_path: &str) -> Self {
-        let lines = if let Ok(file) = File::open(file_path) {
-            let lines: Result<Vec<_>, _> = BufReader::new(file).lines().collect();
-            lines.unwrap_or_else(|_| panic!("Failed to read lines from file: {}", file_path))
+        let lines = if let Ok(mut file) = File::open(file_path) {
+            let mut contents = String::new();
+            file.read_to_string(&mut contents)
+                .unwrap_or_else(|_| panic!("Failed to read lines from file: {}", file_path));
+            contents.split('\n').map(|s| s.to_string()).collect()
         } else {
             File::create(file_path)
                 .unwrap_or_else(|_| panic!("Could neither open or create file: {}", file_path));
@@ -218,6 +221,28 @@ impl Buffer {
 
     pub fn insert_line_after_cursor(&mut self, line: String) {
         self.after_cursor_lines.insert(0, line);
+    }
+
+    pub fn write_to_file(&self, file_path: &str) {
+        let mut file_contents = String::new();
+        for (i, line) in self.before_cursor_lines.iter().enumerate() {
+            if i != 0 {
+                file_contents.push('\n');
+            }
+            file_contents.push_str(line);
+        }
+
+        let cursor_line_line = self.cursor_line.line();
+        file_contents.push('\n');
+        file_contents.push_str(&cursor_line_line);
+
+        for line in self.after_cursor_lines.iter() {
+            file_contents.push('\n');
+            file_contents.push_str(line);
+        }
+
+        // TODO: report error to user instead of panic
+        std::fs::write(file_path, file_contents).unwrap();
     }
 
     pub fn write_debug(&self) {

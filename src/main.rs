@@ -108,8 +108,19 @@ impl State {
                     }
                 }
                 Event::Key(Key::Char('\n')) => {
-                    if self.command_line.line() == ":q!" {
+                    let line = self.command_line.line();
+                    let command = line.trim();
+
+                    if command == ":q!" {
                         return true;
+                    }
+
+                    let mut parts = command.split(' ');
+
+                    if let Some(":w") = parts.next() {
+                        if let Some(file_path) = parts.next() {
+                            self.buffer.write_to_file(file_path);
+                        }
                     }
 
                     self.mode = Mode::Normal;
