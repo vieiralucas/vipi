@@ -111,7 +111,7 @@ impl CursorLine {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.with_cursor.is_empty()
+        self.len() == 0
     }
 
     pub fn insert_char(&mut self, c: char) {
@@ -125,6 +125,19 @@ impl CursorLine {
 
         if let Some(c) = self.before.pop() {
             self.with_cursor.insert(0, c)
+        }
+    }
+
+    pub fn backspace(&mut self) -> bool {
+        if self.is_empty() {
+            false
+        } else if self.with_cursor.is_empty() {
+            self.before.pop().is_some()
+        } else if self.move_left() {
+            self.delete_char();
+            true
+        } else {
+            false
         }
     }
 }
@@ -180,6 +193,16 @@ mod tests {
         let is_empty = cursor_line.is_empty();
 
         assert_eq!(is_empty, true);
+    }
+
+    #[test]
+    fn is_empty_off_by_one() {
+        let mut cursor_line = CursorLine::from_str("0", 0);
+        cursor_line.move_right(true);
+
+        let is_empty = cursor_line.is_empty();
+
+        assert_eq!(is_empty, false);
     }
 
     #[test]
@@ -289,6 +312,36 @@ mod tests {
 
         cursor_line.clamp();
 
+        assert_eq!(cursor_line.before, vec![]);
+        assert_eq!(cursor_line.with_cursor, vec!['a', 'b', 'c']);
+    }
+
+    #[test]
+    fn backspace() {
+        let mut cursor_line = CursorLine::from_str("abc", 2);
+
+        assert_eq!(cursor_line.backspace(), true);
+
+        assert_eq!(cursor_line.before, vec!['a']);
+        assert_eq!(cursor_line.with_cursor, vec!['c']);
+    }
+
+    #[test]
+    fn backspace_when_off_by_one() {
+        let mut cursor_line = CursorLine::from_str("abc", 2);
+        cursor_line.move_right(true);
+
+        assert_eq!(cursor_line.backspace(), true);
+
+        assert_eq!(cursor_line.before, vec!['a', 'b']);
+        assert_eq!(cursor_line.with_cursor, vec![]);
+    }
+
+    #[test]
+    fn backspace_start() {
+        let mut cursor_line = CursorLine::from_str("abc", 0);
+
+        assert_eq!(cursor_line.backspace(), false);
         assert_eq!(cursor_line.before, vec![]);
         assert_eq!(cursor_line.with_cursor, vec!['a', 'b', 'c']);
     }

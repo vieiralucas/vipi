@@ -15,27 +15,44 @@ use buffer::Buffer;
 use cursor_line::CursorLine;
 use vec2::Vec2;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 enum Mode {
     Normal,
     Insert,
+    Command,
 }
 
 #[derive(Debug)]
 struct State {
     mode: Mode,
     buffer: Buffer,
+    command_line: CursorLine,
 }
 
 impl State {
     fn render(&self, term: &mut impl Write) {
-        self.buffer.render(term);
+        if self.mode == Mode::Command {
+            let (_, y) = termion::terminal_size().unwrap();
+
+            write!(
+                term,
+                "{}{}{}",
+                termion::cursor::Goto(1, y),
+                self.command_line.line(),
+                termion::clear::UntilNewline,
+            )
+            .unwrap();
+        } else {
+            self.buffer.render(term);
+        }
+
+        term.flush().unwrap();
     }
 
-    fn update(&mut self, evt: Event) {
+    fn update(&mut self, evt: Event) -> bool {
         write_debug(&format!("{:?}", evt));
 
-        match self.mode {
+        match &self.mode {
             Mode::Normal => match evt {
                 Event::Key(Key::Char('h')) => {
                     self.buffer.move_cursor_left();
@@ -66,6 +83,34 @@ impl State {
                     self.buffer.move_cursor_right(true);
                     self.mode = Mode::Insert;
                 }
+                Event::Key(Key::Char(':')) => {
+                    self.command_line = CursorLine::from_str(":", 0);
+                    self.command_line.move_right(true);
+                    self.mode = Mode::Command;
+                }
+                _ => {}
+            },
+            Mode::Command => match evt {
+                Event::Key(Key::Esc) => {
+                    self.mode = Mode::Normal;
+                }
+                Event::Key(Key::Backspace) => {
+                    if self.command_line.len() == 1 {
+                        self.mode = Mode::Normal;
+                    } else {
+                        self.command_line.backspace();
+                    }
+                }
+                Event::Key(Key::Char('\n')) => {
+                    if self.command_line.line() == ":q!" {
+                        return true;
+                    }
+
+                    self.mode = Mode::Normal;
+                }
+                Event::Key(Key::Char(c)) => {
+                    self.command_line.insert_char(c);
+                }
                 _ => {}
             },
             Mode::Insert => match evt {
@@ -79,6 +124,8 @@ impl State {
                 _ => {}
             },
         }
+
+        false
     }
 }
 
@@ -107,6 +154,7 @@ fn main() {
     let mut state = State {
         buffer,
         mode: Mode::Normal,
+        command_line: CursorLine::from_str("", 0),
     };
 
     state.buffer.write_debug();
@@ -114,17 +162,23 @@ fn main() {
     state.render(&mut stdout);
     for c in stdin.events() {
         let evt = c.unwrap();
-        write_debug(&format!("{:?}\n", evt));
-
-        if evt == Event::Key(Key::Char('q')) {
-            break;
-        }
+        write_debug(&format!("evt: {:?}\n", evt));
 
         state.buffer.write_debug();
 
-        state.update(evt);
+        if state.update(evt) {
+            break;
+        }
         state.render(&mut stdout);
 
         state.buffer.write_debug();
     }
+
+    write!(
+        stdout,
+        "{}{}",
+        termion::clear::All,
+        termion::cursor::Goto(1, 1)
+    )
+    .unwrap();
 }

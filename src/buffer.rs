@@ -23,12 +23,15 @@ enum MoveForwardOutcome {
 
 impl Buffer {
     pub fn from_lines(lines: Vec<String>) -> Self {
+        let mut size: Vec2 = termion::terminal_size().unwrap().into();
+        size.y -= 1;
+
         if let Some((first, rest)) = lines.split_first() {
             Self {
                 before_cursor_lines: vec![],
                 cursor_line: CursorLine::from_str(first, 0),
                 after_cursor_lines: rest.to_vec(),
-                size: termion::terminal_size().unwrap().into(),
+                size,
                 offset: 0,
             }
         } else {
@@ -36,7 +39,7 @@ impl Buffer {
                 before_cursor_lines: vec![],
                 cursor_line: CursorLine::from_str(&String::new(), 0),
                 after_cursor_lines: vec![],
-                size: termion::terminal_size().unwrap().into(),
+                size,
                 offset: 0,
             }
         }
@@ -93,8 +96,6 @@ impl Buffer {
             termion::cursor::Goto((cursor.x + 1) as u16, (cursor.y - self.offset + 1) as u16)
         )
         .unwrap();
-
-        term.flush().unwrap();
     }
 
     fn move_forward(&mut self) -> MoveForwardOutcome {
