@@ -135,11 +135,16 @@ impl Buffer {
     }
 
     pub fn move_cursor_up(&mut self) {
+        let was_edge = self.cursor().y - self.offset == 0;
         if let Some(previous_line) = self.before_cursor_lines.pop() {
             let current_line = self.cursor_line.line();
 
             self.after_cursor_lines.insert(0, current_line);
             self.cursor_line = CursorLine::from_str(&previous_line, self.cursor_line.x());
+
+            if was_edge && self.offset > 0 {
+                self.offset -= 1;
+            }
         }
     }
 
