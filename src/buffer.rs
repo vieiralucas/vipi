@@ -77,17 +77,18 @@ impl Buffer {
             lines.push(line);
         }
 
-        write!(
-            term,
-            "{}{}",
-            termion::clear::All,
-            termion::cursor::Goto(1, 1)
-        )
-        .unwrap();
+        write!(term, "{}", termion::cursor::Goto(1, 1)).unwrap();
         for (i, line) in lines.iter().skip(self.offset).take(self.size.y).enumerate() {
-            write!(term, "{}", line).unwrap();
-            write!(term, "{}", termion::cursor::Goto(1, (i + 2) as u16)).unwrap();
+            write!(
+                term,
+                "{}{}{}",
+                line,
+                termion::clear::UntilNewline,
+                termion::cursor::Goto(1, (i + 2) as u16)
+            )
+            .unwrap();
         }
+        write!(term, "{}", termion::clear::AfterCursor).unwrap();
 
         let cursor = self.cursor();
         write!(
