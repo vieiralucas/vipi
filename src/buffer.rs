@@ -204,7 +204,7 @@ impl Buffer {
     pub fn join_line(&mut self) {
         if let Some(next_line) = self.after_cursor_lines.first() {
             if self.cursor_line.is_empty() {
-                self.cursor_line = CursorLine::from_str(&next_line, 0);
+                self.cursor_line = CursorLine::from_str(next_line, 0);
             } else {
                 self.cursor_line = CursorLine::from_str(
                     &format!("{} {}", self.cursor_line.line(), next_line),
