@@ -82,7 +82,8 @@ impl Buffer {
 
         let mut row = 0;
         let mut col = 0;
-        let mut cursor = Vec2::default();
+        let mut cursor: Option<Vec2> = None;
+
         for (y, line) in lines.iter().skip(self.offset).take(self.size.y).enumerate() {
             if line.is_empty() {
                 write!(
@@ -94,8 +95,7 @@ impl Buffer {
                 .unwrap();
 
                 if y == self.before_cursor_lines.len() {
-                    cursor.x = 0;
-                    cursor.y = row;
+                    cursor = Some(Vec2::new(0, row));
                 }
             }
 
@@ -106,8 +106,7 @@ impl Buffer {
                 }
 
                 if y == self.before_cursor_lines.len() && x == self.cursor_line.x() {
-                    cursor.x = col;
-                    cursor.y = row;
+                    cursor = Some(Vec2::new(col, row));
                 }
 
                 write!(
@@ -121,19 +120,26 @@ impl Buffer {
                 col += 1;
             }
 
+            if y == self.before_cursor_lines.len() && cursor.is_none() {
+                cursor = Some(Vec2::new(self.cursor_line.x(), row));
+            }
+
             row += 1;
             col = 0;
 
             write!(term, "{}", termion::clear::UntilNewline,).unwrap();
         }
 
-        write!(
-            term,
-            "{}{}",
-            termion::clear::AfterCursor,
-            termion::cursor::Goto((cursor.x + 1) as u16, (cursor.y + 1) as u16)
-        )
-        .unwrap();
+        write!(term, "{}", termion::clear::AfterCursor,).unwrap();
+
+        if let Some(cursor) = cursor {
+            write!(
+                term,
+                "{}",
+                termion::cursor::Goto((cursor.x + 1) as u16, (cursor.y + 1) as u16)
+            )
+            .unwrap();
+        }
     }
 
     fn move_forward(&mut self) -> MoveForwardOutcome {
@@ -282,6 +288,17 @@ impl Buffer {
 
         // TODO: report error to user instead of panic
         std::fs::write(file_path, file_contents).unwrap();
+    }
+
+    pub fn insert_new_line(&mut self) {
+        let content_before_cursor = self.cursor_line.content_before_cursor();
+
+        self.before_cursor_lines.push(content_before_cursor);
+        loop {
+            if !self.cursor_line.backspace() {
+                break;
+            }
+        }
     }
 
     pub fn write_debug(&self) {
@@ -601,5 +618,55 @@ mod tests {
         buffer.insert_line_after_cursor("hello".to_string());
 
         assert_eq!(buffer.after_cursor_lines, vec!["hello"]);
+    }
+
+    #[test]
+    fn insert_new_line_start_of_current_line() {
+        let mut buffer = Buffer {
+            before_cursor_lines: vec!["before".to_string()],
+            cursor_line: CursorLine::from_str("cursor_line", 0),
+            after_cursor_lines: vec!["after".to_string()],
+            size: Vec2::new(100, 1),
+            offset: 0,
+        };
+
+        buffer.insert_new_line();
+
+        assert_eq!(buffer.before_cursor_lines, vec!["before", ""]);
+    }
+
+    #[test]
+    fn insert_new_line_end_of_current_line() {
+        let mut cursor_line = CursorLine::from_str("1", 0);
+        cursor_line.move_right(true);
+
+        let mut buffer = Buffer {
+            before_cursor_lines: vec!["before".to_string()],
+            cursor_line,
+            after_cursor_lines: vec!["after".to_string()],
+            size: Vec2::new(100, 1),
+            offset: 0,
+        };
+
+        buffer.insert_new_line();
+
+        assert_eq!(buffer.before_cursor_lines, vec!["before", "1"]);
+        assert_eq!(buffer.cursor_line.line(), "");
+    }
+
+    #[test]
+    fn insert_new_line_middle_of_current_line() {
+        let mut buffer = Buffer {
+            before_cursor_lines: vec!["before".to_string()],
+            cursor_line: CursorLine::from_str("cursor_line", 6),
+            after_cursor_lines: vec!["after".to_string()],
+            size: Vec2::new(100, 1),
+            offset: 0,
+        };
+
+        buffer.insert_new_line();
+
+        assert_eq!(buffer.before_cursor_lines, vec!["before", "cursor"]);
+        assert_eq!(buffer.cursor_line.line(), "_line");
     }
 }

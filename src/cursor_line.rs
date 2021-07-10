@@ -25,6 +25,15 @@ impl CursorLine {
         }
     }
 
+    pub fn content_before_cursor(&self) -> String {
+        let mut before: String = String::with_capacity(self.before.len());
+        for c in self.before.iter() {
+            before.push(*c);
+        }
+
+        before
+    }
+
     pub fn line(&self) -> String {
         let mut before: String = String::with_capacity(self.before.len());
         for c in self.before.iter() {

@@ -135,7 +135,7 @@ impl State {
                     self.buffer.clamp_cursor();
                     self.mode = Mode::Normal;
                 }
-                Event::Key(Key::Char('\n')) => return false,
+                Event::Key(Key::Char('\n')) => self.buffer.insert_new_line(),
                 Event::Key(Key::Char(c)) => {
                     self.buffer.insert_char(c);
                 }
