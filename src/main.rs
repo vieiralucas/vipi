@@ -132,7 +132,7 @@ impl State {
             },
             Mode::Insert => match evt {
                 Event::Key(Key::Esc) => {
-                    self.buffer.clamp_cursor();
+                    self.buffer.clamp_cursor(false);
                     self.mode = Mode::Normal;
                 }
                 Event::Key(Key::Char('\n')) => self.buffer.insert_new_line(),

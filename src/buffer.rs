@@ -3,16 +3,14 @@ use std::io::prelude::*;
 use std::io::Write;
 
 use crate::write_debug;
-use crate::CursorLine;
 use crate::Vec2;
 
 #[derive(Debug)]
 pub struct Buffer {
-    before_cursor_lines: Vec<String>,
-    cursor_line: CursorLine,
-    after_cursor_lines: Vec<String>,
-    size: Vec2,
+    lines: Vec<String>,
+    cursor: Vec2,
     offset: usize,
+    size: Vec2,
 }
 
 #[derive(PartialEq)]
@@ -27,22 +25,11 @@ impl Buffer {
         let mut size: Vec2 = termion::terminal_size().unwrap().into();
         size.y -= 1;
 
-        if let Some((first, rest)) = lines.split_first() {
-            Self {
-                before_cursor_lines: vec![],
-                cursor_line: CursorLine::from_str(first, 0),
-                after_cursor_lines: rest.to_vec(),
-                size,
-                offset: 0,
-            }
-        } else {
-            Self {
-                before_cursor_lines: vec![],
-                cursor_line: CursorLine::from_str(&String::new(), 0),
-                after_cursor_lines: vec![],
-                size,
-                offset: 0,
-            }
+        Self {
+            lines,
+            cursor: Vec2::default(),
+            offset: 0,
+            size,
         }
     }
 
@@ -61,30 +48,18 @@ impl Buffer {
         Self::from_lines(lines)
     }
 
-    fn cursor(&self) -> Vec2 {
-        Vec2::new(self.cursor_line.x(), self.before_cursor_lines.len())
-    }
-
     pub fn render(&self, term: &mut impl Write) {
-        let mut lines =
-            Vec::with_capacity(self.before_cursor_lines.len() + 1 + self.after_cursor_lines.len());
-
-        for line in self.before_cursor_lines.iter() {
-            lines.push(line);
-        }
-
-        let cursor_line_line = self.cursor_line.line();
-        lines.push(&cursor_line_line);
-
-        for line in self.after_cursor_lines.iter() {
-            lines.push(line);
-        }
-
         let mut row = 0;
         let mut col = 0;
         let mut cursor: Option<Vec2> = None;
 
-        for (y, line) in lines.iter().skip(self.offset).take(self.size.y).enumerate() {
+        for (y, line) in self
+            .lines
+            .iter()
+            .skip(self.offset)
+            .take(self.size.y)
+            .enumerate()
+        {
             if line.is_empty() {
                 write!(
                     term,
@@ -94,7 +69,7 @@ impl Buffer {
                 )
                 .unwrap();
 
-                if y == self.before_cursor_lines.len() {
+                if y + self.offset == self.cursor.y {
                     cursor = Some(Vec2::new(0, row));
                 }
             }
@@ -105,7 +80,7 @@ impl Buffer {
                     col = 0;
                 }
 
-                if y == self.before_cursor_lines.len() && x == self.cursor_line.x() {
+                if y + self.offset == self.cursor.y && x == self.cursor.x {
                     cursor = Some(Vec2::new(col, row));
                 }
 
@@ -120,8 +95,8 @@ impl Buffer {
                 col += 1;
             }
 
-            if y == self.before_cursor_lines.len() && cursor.is_none() {
-                cursor = Some(Vec2::new(self.cursor_line.x(), row));
+            if y + self.offset == self.cursor.y && cursor.is_none() {
+                cursor = Some(Vec2::new(col, row));
             }
 
             row += 1;
@@ -142,67 +117,101 @@ impl Buffer {
         }
     }
 
-    fn move_forward(&mut self) -> MoveForwardOutcome {
-        if self.cursor_line.move_right(false) {
-            MoveForwardOutcome::Char
-        } else if !self.after_cursor_lines.is_empty() {
-            self.move_cursor_down();
-            self.cursor_line.set_x(0);
+    pub fn current_line(&self) -> &String {
+        &self.lines[self.cursor.y]
+    }
 
+    fn move_forward(&mut self) -> MoveForwardOutcome {
+        let line = self.current_line();
+        if self.cursor.x + 1 < line.len() {
+            self.cursor.x += 1;
+            MoveForwardOutcome::Char
+        } else if self.cursor.y + 1 < self.lines.len() {
+            self.move_cursor_down();
+            self.cursor.x = 0;
             MoveForwardOutcome::Line
         } else {
             MoveForwardOutcome::Noop
         }
     }
 
+    pub fn clamp_cursor(&mut self, allow_one_off: bool) {
+        let line = self.current_line();
+
+        let mut max = line.len();
+        if !allow_one_off && max > 0 {
+            max -= 1;
+        }
+
+        self.cursor.x = self.cursor.x.clamp(0, max);
+    }
+
     pub fn move_cursor_left(&mut self) {
-        self.cursor_line.move_left();
+        if self.cursor.x > 0 {
+            self.cursor.x -= 1;
+        }
     }
 
     pub fn move_cursor_down(&mut self) {
-        if let Some(next_line) = self.after_cursor_lines.first() {
-            let was_edge = self.cursor().y - self.offset == self.size.y - 1;
-            let current_line = self.cursor_line.line();
+        let is_edge = self.cursor.y - self.offset == self.size.y - 1;
+        if self.cursor.y + 1 < self.lines.len() {
+            self.cursor.y += 1;
+            self.cursor.x = self.cursor.x.clamp(0, self.lines[self.cursor.y].len());
 
-            self.before_cursor_lines.push(current_line);
-            self.cursor_line = CursorLine::from_str(next_line, self.cursor_line.x());
-            self.after_cursor_lines.remove(0);
-
-            if was_edge {
+            if is_edge {
                 self.offset += 1;
             }
         }
     }
 
     pub fn move_cursor_up(&mut self) {
-        let was_edge = self.cursor().y - self.offset == 0;
-        if let Some(previous_line) = self.before_cursor_lines.pop() {
-            let current_line = self.cursor_line.line();
+        let is_edge = self.cursor.y - self.offset == 0;
+        if self.cursor.y > 0 {
+            self.cursor.y -= 1;
+            self.cursor.x = self.cursor.x.clamp(0, self.lines[self.cursor.y].len());
 
-            self.after_cursor_lines.insert(0, current_line);
-            self.cursor_line = CursorLine::from_str(&previous_line, self.cursor_line.x());
-
-            if was_edge && self.offset > 0 {
+            if is_edge {
                 self.offset -= 1;
             }
         }
     }
 
     pub fn move_cursor_right(&mut self, allow_one_off: bool) {
-        self.cursor_line.move_right(allow_one_off);
+        self.cursor.x += 1;
+        self.clamp_cursor(allow_one_off);
     }
 
     pub fn delete_char(&mut self) {
-        self.cursor_line.delete_char();
+        let line = &mut self.lines[self.cursor.y];
+        if line.len() > self.cursor.x {
+            line.remove(self.cursor.x);
+            self.clamp_cursor(false);
+        }
     }
 
     pub fn move_cursor_first_character(&mut self) {
-        self.cursor_line.set_x(0);
+        self.cursor.x = 0;
+    }
+
+    fn is_at_whitespace(&self) -> bool {
+        self.current_line()
+            .chars()
+            .nth(self.cursor.x)
+            .map(|c| c.is_whitespace())
+            .unwrap_or(false)
+    }
+
+    fn is_at_alphanumeric(&self) -> bool {
+        self.current_line()
+            .chars()
+            .nth(self.cursor.x)
+            .map(|c| c.is_alphanumeric())
+            .unwrap_or(false)
     }
 
     pub fn word_forward(&mut self) {
         let mut moved_from_empty_line = false;
-        if self.cursor_line.is_empty() {
+        if self.current_line().is_empty() {
             if self.move_forward() == MoveForwardOutcome::Noop {
                 return;
             }
@@ -211,20 +220,20 @@ impl Buffer {
         }
 
         if !moved_from_empty_line {
-            if self.cursor_line.is_at_whitespace() {
-                while self.cursor_line.is_at_whitespace() {
+            if self.is_at_whitespace() {
+                while self.is_at_whitespace() {
                     if self.move_forward() != MoveForwardOutcome::Char {
                         break;
                     }
                 }
-            } else if self.cursor_line.is_at_alphanumeric() {
-                while self.cursor_line.is_at_alphanumeric() {
+            } else if self.is_at_alphanumeric() {
+                while self.is_at_alphanumeric() {
                     if self.move_forward() != MoveForwardOutcome::Char {
                         break;
                     }
                 }
             } else {
-                while !self.cursor_line.is_at_alphanumeric() {
+                while !self.is_at_alphanumeric() {
                     if self.move_forward() != MoveForwardOutcome::Char {
                         break;
                     }
@@ -232,8 +241,8 @@ impl Buffer {
             }
         }
 
-        if !self.cursor_line.is_empty() {
-            while self.cursor_line.is_at_whitespace() {
+        if !self.current_line().is_empty() {
+            while self.is_at_whitespace() {
                 if self.move_forward() == MoveForwardOutcome::Noop {
                     break;
                 }
@@ -242,47 +251,43 @@ impl Buffer {
     }
 
     pub fn join_line(&mut self) {
-        if let Some(next_line) = self.after_cursor_lines.first() {
-            if self.cursor_line.is_empty() {
-                self.cursor_line = CursorLine::from_str(next_line, 0);
+        if let Some(next_line) = self.lines.get(self.cursor.y + 1) {
+            if self.current_line().is_empty() {
+                self.lines.remove(self.cursor.y);
             } else {
-                self.cursor_line = CursorLine::from_str(
-                    &format!("{} {}", self.cursor_line.line(), next_line),
-                    self.cursor_line.len(),
-                );
+                let current_line = self.current_line();
+                self.lines[self.cursor.y] = format!("{} {}", current_line, next_line);
+                self.lines.remove(self.cursor.y + 1);
             }
-
-            self.after_cursor_lines.remove(0);
         }
     }
 
     pub fn insert_char(&mut self, c: char) {
-        self.cursor_line.insert_char(c);
-    }
+        let line = &mut self.lines[self.cursor.y];
+        if self.cursor.x < line.len() {
+            line.insert(self.cursor.x, c);
+        } else {
+            line.push(c);
+        }
 
-    pub fn clamp_cursor(&mut self) {
-        self.cursor_line.clamp();
+        self.cursor.x += 1;
     }
 
     pub fn insert_line_after_cursor(&mut self, line: String) {
-        self.after_cursor_lines.insert(0, line);
+        if self.cursor.y + 1 < self.lines.len() {
+            self.lines.insert(self.cursor.y + 1, line);
+        } else {
+            self.lines.push(line);
+        }
     }
 
+    // TODO: improve performance
     pub fn write_to_file(&self, file_path: &str) {
         let mut file_contents = String::new();
-        for (i, line) in self.before_cursor_lines.iter().enumerate() {
+        for (i, line) in self.lines.iter().enumerate() {
             if i != 0 {
                 file_contents.push('\n');
             }
-            file_contents.push_str(line);
-        }
-
-        let cursor_line_line = self.cursor_line.line();
-        file_contents.push('\n');
-        file_contents.push_str(&cursor_line_line);
-
-        for line in self.after_cursor_lines.iter() {
-            file_contents.push('\n');
             file_contents.push_str(line);
         }
 
@@ -291,30 +296,20 @@ impl Buffer {
     }
 
     pub fn insert_new_line(&mut self) {
-        let content_before_cursor = self.cursor_line.content_before_cursor();
+        let line = self.current_line().clone();
+        let (before_cursor, from_cursor) = line.split_at(self.cursor.x);
 
-        self.before_cursor_lines.push(content_before_cursor);
-        loop {
-            if !self.cursor_line.backspace() {
-                break;
-            }
-        }
+        self.lines[self.cursor.y] = before_cursor.to_string();
+        self.insert_line_after_cursor(from_cursor.to_string());
+        self.cursor.y += 1;
+        self.cursor.x = 0;
     }
 
     pub fn write_debug(&self) {
         write_debug("##########################");
-        write_debug(&format!(
-            "before_cursor {:?}\n",
-            self.before_cursor_lines.last()
-        ));
-        write_debug(&format!("cursor {:?}\n", self.cursor_line));
-        write_debug(&format!("cursor_vec {:?}\n", self.cursor()));
-        write_debug(&format!(
-            "after_cursor {:?}\n",
-            self.after_cursor_lines.first()
-        ));
-        write_debug(&format!("size {:?}\n", self.size));
         write_debug(&format!("offset {:?}\n", self.offset));
+        write_debug(&format!("cursor {:?}\n", self.cursor));
+        write_debug(&format!("current_line {:?}\n", self.current_line()));
         write_debug("##########################");
     }
 }
@@ -325,314 +320,353 @@ mod tests {
     use crate::CursorLine;
 
     #[test]
+    fn move_cursor_down() {
+        let mut buffer = Buffer {
+            lines: vec!["line1".to_string(), "line2".to_string()],
+            cursor: Vec2::default(),
+            offset: 0,
+            size: Vec2::new(100, 100),
+        };
+
+        buffer.move_cursor_down();
+
+        assert_eq!(buffer.cursor, Vec2::new(0, 1));
+    }
+
+    #[test]
+    fn move_cursor_down_offset() {
+        let mut buffer = Buffer {
+            lines: vec!["line1".to_string(), "line2".to_string()],
+            cursor: Vec2::default(),
+            size: Vec2::new(100, 1),
+            offset: 0,
+        };
+
+        buffer.move_cursor_down();
+
+        assert_eq!(buffer.cursor, Vec2::new(0, 1));
+        assert_eq!(buffer.offset, 1);
+    }
+
+    #[test]
     fn move_forward() {
         let mut buffer = Buffer {
-            before_cursor_lines: vec![],
-            cursor_line: CursorLine::from_str("abc", 0),
-            after_cursor_lines: vec![],
-            size: Vec2::new(100, 100),
+            lines: vec!["abc".to_string()],
+            cursor: Vec2::default(),
             offset: 0,
+            size: Vec2::new(100, 100),
         };
 
         buffer.move_forward();
 
-        assert_eq!(buffer.cursor(), Vec2::new(1, 0));
+        assert_eq!(buffer.cursor, Vec2::new(1, 0));
     }
 
     #[test]
     fn move_forward_no_op_when_end_of_buffer() {
         let mut buffer = Buffer {
-            before_cursor_lines: vec![],
-            cursor_line: CursorLine::from_str("abc", 2),
-            after_cursor_lines: vec![],
-            size: Vec2::new(100, 100),
+            lines: vec!["abc".to_string()],
+            cursor: Vec2::new(2, 0),
             offset: 0,
+            size: Vec2::new(100, 100),
         };
 
         buffer.move_forward();
 
-        assert_eq!(buffer.cursor(), Vec2::new(2, 0));
+        assert_eq!(buffer.cursor, Vec2::new(2, 0));
     }
 
     #[test]
     fn move_forward_wrap_line() {
         let mut buffer = Buffer {
-            before_cursor_lines: vec![],
-            cursor_line: CursorLine::from_str("line1", 4),
-            after_cursor_lines: vec!["line2".to_string()],
-            size: Vec2::new(100, 100),
+            lines: vec!["line!".to_string(), "line2".to_string()],
+            cursor: Vec2::new(4, 0),
             offset: 0,
+            size: Vec2::new(100, 100),
         };
 
         buffer.move_forward();
 
-        assert_eq!(buffer.cursor(), Vec2::new(0, 1));
+        assert_eq!(buffer.cursor, Vec2::new(0, 1));
     }
 
     #[test]
     fn move_forward_wrap_line_offset() {
         let mut buffer = Buffer {
-            before_cursor_lines: vec![],
-            cursor_line: CursorLine::from_str("line1", 4),
-            after_cursor_lines: vec!["line2".to_string()],
-            size: Vec2::new(100, 1),
+            lines: vec!["line1".to_string(), "line2".to_string()],
+            cursor: Vec2::new(4, 0),
             offset: 0,
+            size: Vec2::new(100, 1),
         };
 
         buffer.move_forward();
 
-        assert_eq!(buffer.cursor(), Vec2::new(0, 1));
+        assert_eq!(buffer.cursor, Vec2::new(0, 1));
         assert_eq!(buffer.offset, 1);
     }
 
     #[test]
     fn word_forward() {
         let mut buffer = Buffer {
-            before_cursor_lines: vec![],
-            cursor_line: CursorLine::from_str("Word Forward", 0),
-            after_cursor_lines: vec![],
+            lines: vec!["Word Forward".to_string()],
+            cursor: Vec2::default(),
             size: Vec2::new(100, 100),
             offset: 0,
         };
 
         buffer.word_forward();
 
-        assert_eq!(buffer.cursor(), Vec2::new(5, 0));
+        assert_eq!(buffer.cursor, Vec2::new(5, 0));
     }
 
     #[test]
     fn word_forward_space_character() {
         let mut buffer = Buffer {
-            before_cursor_lines: vec![],
-            cursor_line: CursorLine::from_str(" Word Forward", 0),
-            after_cursor_lines: vec![],
+            lines: vec![" Word Forward".to_string()],
+            cursor: Vec2::default(),
             size: Vec2::new(100, 100),
             offset: 0,
         };
 
         buffer.word_forward();
-        assert_eq!(buffer.cursor(), Vec2::new(1, 0));
+        assert_eq!(buffer.cursor, Vec2::new(1, 0));
     }
 
     #[test]
     fn word_forward_multiple_space_character() {
         let mut buffer = Buffer {
-            before_cursor_lines: vec![],
-            cursor_line: CursorLine::from_str("  Word Forward", 0),
-            after_cursor_lines: vec![],
+            lines: vec!["  Word Forward".to_string()],
+            cursor: Vec2::default(),
             size: Vec2::new(100, 100),
             offset: 0,
         };
 
         buffer.word_forward();
-        assert_eq!(buffer.cursor(), Vec2::new(2, 0));
+        assert_eq!(buffer.cursor, Vec2::new(2, 0));
     }
 
     #[test]
     fn word_forward_non_alpha_numeric_character() {
         let mut buffer = Buffer {
-            before_cursor_lines: vec![],
-            cursor_line: CursorLine::from_str(";Word Forward", 0),
-            after_cursor_lines: vec![],
+            lines: vec![";Word Forward".to_string()],
+            cursor: Vec2::default(),
             size: Vec2::new(100, 100),
             offset: 0,
         };
 
         buffer.word_forward();
-        assert_eq!(buffer.cursor(), Vec2::new(1, 0));
+        assert_eq!(buffer.cursor, Vec2::new(1, 0));
     }
 
     #[test]
     fn word_forward_multiple_non_alpha_numeric_character() {
         let mut buffer = Buffer {
-            before_cursor_lines: vec![],
-            cursor_line: CursorLine::from_str(";;Word Forward", 0),
-            after_cursor_lines: vec![],
+            lines: vec![";;Word Forward".to_string()],
+            cursor: Vec2::default(),
             size: Vec2::new(100, 100),
             offset: 0,
         };
 
         buffer.word_forward();
-        assert_eq!(buffer.cursor(), Vec2::new(2, 0));
+        assert_eq!(buffer.cursor, Vec2::new(2, 0));
     }
 
     #[test]
     fn word_forward_wrap_line() {
         let mut buffer = Buffer {
-            before_cursor_lines: vec![],
-            cursor_line: CursorLine::from_str("word1", 0),
-            after_cursor_lines: vec!["word2".to_string()],
+            lines: vec!["word1".to_string(), "word2".to_string()],
+            cursor: Vec2::default(),
             size: Vec2::new(100, 100),
             offset: 0,
         };
 
         buffer.word_forward();
-        assert_eq!(buffer.cursor(), Vec2::new(0, 1));
+        assert_eq!(buffer.cursor, Vec2::new(0, 1));
 
         // next line starts with space
         buffer = Buffer {
-            before_cursor_lines: vec![],
-            cursor_line: CursorLine::from_str("word1", 0),
-            after_cursor_lines: vec![" word2".to_string()],
+            lines: vec!["word1".to_string(), " word2".to_string()],
+            cursor: Vec2::default(),
             size: Vec2::new(100, 100),
             offset: 0,
         };
 
         buffer.word_forward();
-        assert_eq!(buffer.cursor(), Vec2::new(1, 1));
+        assert_eq!(buffer.cursor, Vec2::new(1, 1));
 
         // next line is empty
         buffer = Buffer {
-            before_cursor_lines: vec![],
-            cursor_line: CursorLine::from_str("word1", 0),
-            after_cursor_lines: vec!["".to_string()],
+            lines: vec!["word1".to_string(), "".to_string()],
+            cursor: Vec2::default(),
             size: Vec2::new(100, 100),
             offset: 0,
         };
 
         buffer.word_forward();
-        assert_eq!(buffer.cursor(), Vec2::new(0, 1));
+        assert_eq!(buffer.cursor, Vec2::new(0, 1));
 
         // when current line has trailing space
         buffer = Buffer {
-            before_cursor_lines: vec![],
-            cursor_line: CursorLine::from_str("word1 ", 0),
-            after_cursor_lines: vec!["word2".to_string()],
+            lines: vec!["word1 ".to_string(), "word2".to_string()],
+            cursor: Vec2::default(),
             size: Vec2::new(100, 100),
             offset: 0,
         };
 
         buffer.word_forward();
-        assert_eq!(buffer.cursor(), Vec2::new(0, 1));
+        assert_eq!(buffer.cursor, Vec2::new(0, 1));
 
         // when current line has trailing space and next starts with space
         buffer = Buffer {
-            before_cursor_lines: vec![],
-            cursor_line: CursorLine::from_str("; ", 0),
-            after_cursor_lines: vec![" word2".to_string()],
+            lines: vec!["; ".to_string(), " word2".to_string()],
+            cursor: Vec2::default(),
             size: Vec2::new(100, 100),
             offset: 0,
         };
 
         buffer.word_forward();
-        assert_eq!(buffer.cursor(), Vec2::new(1, 1));
+        assert_eq!(buffer.cursor, Vec2::new(1, 1));
 
-        // when current line has trailing space and next starts with space
         buffer = Buffer {
-            before_cursor_lines: vec![],
-            cursor_line: CursorLine::from_str("weird ", 0),
-            after_cursor_lines: vec![" ".to_string(), " scenario".to_string()],
+            lines: vec![
+                "weird ".to_string(),
+                " ".to_string(),
+                " scenario".to_string(),
+            ],
+            cursor: Vec2::default(),
             size: Vec2::new(100, 100),
             offset: 0,
         };
 
         buffer.word_forward();
-        assert_eq!(buffer.cursor(), Vec2::new(1, 2));
+        assert_eq!(buffer.cursor, Vec2::new(1, 2));
     }
 
     #[test]
     fn word_forward_wrap_line_current_line_is_empty() {
         let mut buffer = Buffer {
-            before_cursor_lines: vec![],
-            cursor_line: CursorLine::from_str("", 0),
-            after_cursor_lines: vec!["word".to_string()],
+            lines: vec!["".to_string(), "word".to_string()],
+            cursor: Vec2::default(),
             size: Vec2::new(100, 100),
             offset: 0,
         };
 
         buffer.word_forward();
-        assert_eq!(buffer.cursor(), Vec2::new(0, 1));
+        assert_eq!(buffer.cursor, Vec2::new(0, 1));
     }
 
     #[test]
     fn word_forward_starts_white_space() {
         let mut buffer = Buffer {
-            before_cursor_lines: vec![],
-            cursor_line: CursorLine::from_str("    }", 0),
-            after_cursor_lines: vec!["}".to_string()],
+            lines: vec!["    }".to_string(), "}".to_string()],
+            cursor: Vec2::default(),
             size: Vec2::new(100, 100),
             offset: 0,
         };
 
         buffer.word_forward();
-        assert_eq!(buffer.cursor(), Vec2::new(4, 0));
+        assert_eq!(buffer.cursor, Vec2::new(4, 0));
     }
 
     #[test]
     fn word_forward_wrap_line_offset() {
         let mut buffer = Buffer {
-            before_cursor_lines: vec![],
-            cursor_line: CursorLine::from_str("word1", 0),
-            after_cursor_lines: vec!["word2".to_string(), "word3".to_string()],
+            lines: vec![
+                "word1".to_string(),
+                "word2".to_string(),
+                "word3".to_string(),
+            ],
+            cursor: Vec2::default(),
             size: Vec2::new(100, 1),
             offset: 0,
         };
 
         buffer.word_forward();
-        assert_eq!(buffer.cursor(), Vec2::new(0, 1));
+        assert_eq!(buffer.cursor, Vec2::new(0, 1));
         assert_eq!(buffer.offset, 1);
     }
 
     #[test]
     fn clamp_cursor() {
         let mut buffer = Buffer {
-            before_cursor_lines: vec![],
-            cursor_line: CursorLine::from_str("", 0),
-            after_cursor_lines: vec![],
+            lines: vec!["".to_string()],
+            cursor: Vec2::default(),
             size: Vec2::new(100, 1),
             offset: 0,
         };
 
         buffer.insert_char('a');
-        buffer.clamp_cursor();
+        buffer.clamp_cursor(false);
 
-        assert_eq!(buffer.cursor(), Vec2::new(0, 0));
+        assert_eq!(buffer.cursor, Vec2::new(0, 0));
     }
 
     #[test]
     fn insert_char() {
         let mut buffer = Buffer {
-            before_cursor_lines: vec![],
-            cursor_line: CursorLine::from_str("", 0),
-            after_cursor_lines: vec![],
+            lines: vec!["".to_string()],
+            cursor: Vec2::default(),
             size: Vec2::new(100, 1),
             offset: 0,
         };
 
         buffer.insert_char('a');
 
-        assert_eq!(buffer.cursor_line.line(), "a");
-        assert_eq!(buffer.cursor(), Vec2::new(1, 0));
+        assert_eq!(buffer.current_line(), "a");
+        assert_eq!(buffer.cursor, Vec2::new(1, 0));
     }
 
     #[test]
-    fn insert_line_after_cursor() {
+    fn insert_line_after_cursor_last_line() {
         let mut buffer = Buffer {
-            before_cursor_lines: vec![],
-            cursor_line: CursorLine::from_str("", 0),
-            after_cursor_lines: vec![],
+            lines: vec!["".to_string()],
+            cursor: Vec2::default(),
             size: Vec2::new(100, 1),
             offset: 0,
         };
 
         buffer.insert_line_after_cursor("hello".to_string());
 
-        assert_eq!(buffer.after_cursor_lines, vec!["hello"]);
+        assert_eq!(buffer.lines, vec!["", "hello"]);
+        assert_eq!(buffer.cursor, Vec2::default());
+    }
+
+    #[test]
+    fn insert_line_after_cursor_middle_line() {
+        let mut buffer = Buffer {
+            lines: vec![
+                "line1".to_string(),
+                "line2".to_string(),
+                "line3".to_string(),
+            ],
+            cursor: Vec2::new(2, 1),
+            size: Vec2::new(100, 1),
+            offset: 0,
+        };
+
+        buffer.insert_line_after_cursor("inserted".to_string());
+
+        assert_eq!(buffer.lines, vec!["line1", "line2", "inserted", "line3"]);
+        assert_eq!(buffer.cursor, Vec2::new(2, 1));
     }
 
     #[test]
     fn insert_new_line_start_of_current_line() {
         let mut buffer = Buffer {
-            before_cursor_lines: vec!["before".to_string()],
-            cursor_line: CursorLine::from_str("cursor_line", 0),
-            after_cursor_lines: vec!["after".to_string()],
+            lines: vec![
+                "before".to_string(),
+                "cursor_line".to_string(),
+                "after".to_string(),
+            ],
+            cursor: Vec2::new(0, 1),
             size: Vec2::new(100, 1),
             offset: 0,
         };
 
         buffer.insert_new_line();
 
-        assert_eq!(buffer.before_cursor_lines, vec!["before", ""]);
+        assert_eq!(buffer.lines, vec!["before", "", "cursor_line", "after"]);
+        assert_eq!(buffer.cursor, Vec2::new(0, 2));
     }
 
     #[test]
@@ -641,32 +675,34 @@ mod tests {
         cursor_line.move_right(true);
 
         let mut buffer = Buffer {
-            before_cursor_lines: vec!["before".to_string()],
-            cursor_line,
-            after_cursor_lines: vec!["after".to_string()],
+            lines: vec!["before".to_string(), "1".to_string(), "after".to_string()],
+            cursor: Vec2::new(1, 1),
             size: Vec2::new(100, 1),
             offset: 0,
         };
 
         buffer.insert_new_line();
 
-        assert_eq!(buffer.before_cursor_lines, vec!["before", "1"]);
-        assert_eq!(buffer.cursor_line.line(), "");
+        assert_eq!(buffer.lines, vec!["before", "1", "", "after"]);
+        assert_eq!(buffer.cursor, Vec2::new(0, 2));
     }
 
     #[test]
     fn insert_new_line_middle_of_current_line() {
         let mut buffer = Buffer {
-            before_cursor_lines: vec!["before".to_string()],
-            cursor_line: CursorLine::from_str("cursor_line", 6),
-            after_cursor_lines: vec!["after".to_string()],
+            lines: vec![
+                "before".to_string(),
+                "cursor_line".to_string(),
+                "after".to_string(),
+            ],
+            cursor: Vec2::new(6, 1),
             size: Vec2::new(100, 1),
             offset: 0,
         };
 
         buffer.insert_new_line();
 
-        assert_eq!(buffer.before_cursor_lines, vec!["before", "cursor"]);
-        assert_eq!(buffer.cursor_line.line(), "_line");
+        assert_eq!(buffer.lines, vec!["before", "cursor", "_line", "after"]);
+        assert_eq!(buffer.cursor, Vec2::new(0, 2));
     }
 }
