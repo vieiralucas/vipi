@@ -80,24 +80,58 @@ impl Buffer {
             lines.push(line);
         }
 
-        write!(term, "{}", termion::cursor::Goto(1, 1)).unwrap();
-        for (i, line) in lines.iter().skip(self.offset).take(self.size.y).enumerate() {
-            write!(
-                term,
-                "{}{}{}",
-                line,
-                termion::clear::UntilNewline,
-                termion::cursor::Goto(1, (i + 2) as u16)
-            )
-            .unwrap();
-        }
-        write!(term, "{}", termion::clear::AfterCursor).unwrap();
+        let mut row = 0;
+        let mut col = 0;
+        let mut cursor = Vec2::default();
+        for (y, line) in lines.iter().skip(self.offset).take(self.size.y).enumerate() {
+            if line.is_empty() {
+                write!(
+                    term,
+                    "{}{}",
+                    termion::cursor::Goto((col + 1) as u16, (row + 1) as u16),
+                    termion::clear::UntilNewline
+                )
+                .unwrap();
 
-        let cursor = self.cursor();
+                if y == self.before_cursor_lines.len() {
+                    cursor.x = 0;
+                    cursor.y = row;
+                }
+            }
+
+            for (x, c) in line.chars().enumerate() {
+                if col >= self.size.x {
+                    row += 1;
+                    col = 0;
+                }
+
+                if y == self.before_cursor_lines.len() && x == self.cursor_line.x() {
+                    cursor.x = col;
+                    cursor.y = row;
+                }
+
+                write!(
+                    term,
+                    "{}{}",
+                    termion::cursor::Goto((col + 1) as u16, (row + 1) as u16),
+                    c
+                )
+                .unwrap();
+
+                col += 1;
+            }
+
+            row += 1;
+            col = 0;
+
+            write!(term, "{}", termion::clear::UntilNewline,).unwrap();
+        }
+
         write!(
             term,
-            "{}",
-            termion::cursor::Goto((cursor.x + 1) as u16, (cursor.y - self.offset + 1) as u16)
+            "{}{}",
+            termion::clear::AfterCursor,
+            termion::cursor::Goto((cursor.x + 1) as u16, (cursor.y + 1) as u16)
         )
         .unwrap();
     }
