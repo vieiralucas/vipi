@@ -4,5 +4,5 @@
 
 ## Install
 ```console
-npm i -g @vipi/vipi
+cargo install vipi
 ```
