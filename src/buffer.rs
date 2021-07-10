@@ -284,6 +284,17 @@ impl Buffer {
         std::fs::write(file_path, file_contents).unwrap();
     }
 
+    pub fn insert_new_line(&mut self) {
+        let content_before_cursor = self.cursor_line.content_before_cursor();
+
+        self.before_cursor_lines.push(content_before_cursor);
+        loop {
+            if !self.cursor_line.backspace() {
+                break;
+            }
+        }
+    }
+
     pub fn write_debug(&self) {
         write_debug("##########################");
         write_debug(&format!(
@@ -601,5 +612,55 @@ mod tests {
         buffer.insert_line_after_cursor("hello".to_string());
 
         assert_eq!(buffer.after_cursor_lines, vec!["hello"]);
+    }
+
+    #[test]
+    fn insert_new_line_start_of_current_line() {
+        let mut buffer = Buffer {
+            before_cursor_lines: vec!["before".to_string()],
+            cursor_line: CursorLine::from_str("cursor_line", 0),
+            after_cursor_lines: vec!["after".to_string()],
+            size: Vec2::new(100, 1),
+            offset: 0,
+        };
+
+        buffer.insert_new_line();
+
+        assert_eq!(buffer.before_cursor_lines, vec!["before", ""]);
+    }
+
+    #[test]
+    fn insert_new_line_end_of_current_line() {
+        let mut cursor_line = CursorLine::from_str("1", 0);
+        cursor_line.move_right(true);
+
+        let mut buffer = Buffer {
+            before_cursor_lines: vec!["before".to_string()],
+            cursor_line,
+            after_cursor_lines: vec!["after".to_string()],
+            size: Vec2::new(100, 1),
+            offset: 0,
+        };
+
+        buffer.insert_new_line();
+
+        assert_eq!(buffer.before_cursor_lines, vec!["before", "1"]);
+        assert_eq!(buffer.cursor_line.line(), "");
+    }
+
+    #[test]
+    fn insert_new_line_middle_of_current_line() {
+        let mut buffer = Buffer {
+            before_cursor_lines: vec!["before".to_string()],
+            cursor_line: CursorLine::from_str("cursor_line", 6),
+            after_cursor_lines: vec!["after".to_string()],
+            size: Vec2::new(100, 1),
+            offset: 0,
+        };
+
+        buffer.insert_new_line();
+
+        assert_eq!(buffer.before_cursor_lines, vec!["before", "cursor"]);
+        assert_eq!(buffer.cursor_line.line(), "_line");
     }
 }
