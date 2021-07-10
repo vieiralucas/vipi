@@ -1,9 +1,15 @@
 [package]
 name = "vipi"
+description = "vipi is a terminal text editor heavily inspired by vim"
 version = "0.1.0"
 edition = "2018"
+authors = ["Lucas Vieira <vieiralucas4@gmail.com"]
+license-file = "LICENSE"
+keywords = ["editor", "text-editor", "vim", "terminal"]
+homepage = "https://github.com/vieiralucas/vipi"
+repository = "https://github.com/vieiralucas/vipi"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-termion = "*"
+termion = "1.5.6"
