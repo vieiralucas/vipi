@@ -156,12 +156,13 @@ impl Buffer {
         let is_edge = self.cursor.y - self.offset == self.size.y - 1;
         if self.cursor.y + 1 < self.lines.len() {
             self.cursor.y += 1;
-            self.cursor.x = self.cursor.x.clamp(0, self.lines[self.cursor.y].len());
 
             if is_edge {
                 self.offset += 1;
             }
         }
+
+        self.clamp_cursor(false);
     }
 
     pub fn move_cursor_up(&mut self) {
@@ -346,6 +347,20 @@ mod tests {
 
         assert_eq!(buffer.cursor, Vec2::new(0, 1));
         assert_eq!(buffer.offset, 1);
+    }
+
+    #[test]
+    fn move_cursor_down_clamp_x() {
+        let mut buffer = Buffer {
+            lines: vec!["big line".to_string(), "small".to_string()],
+            cursor: Vec2::new(7, 0),
+            size: Vec2::new(100, 100),
+            offset: 0,
+        };
+
+        buffer.move_cursor_down();
+
+        assert_eq!(buffer.cursor, Vec2::new(4, 1));
     }
 
     #[test]
