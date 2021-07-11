@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::Write;
@@ -12,6 +13,7 @@ pub struct Buffer {
     offset: usize,
     pos: Vec2,
     size: Vec2,
+    line_num: bool,
 }
 
 #[derive(PartialEq)]
@@ -22,13 +24,14 @@ enum MoveForwardOutcome {
 }
 
 impl Buffer {
-    pub fn from_lines(lines: Vec<String>, pos: Vec2, size: Vec2) -> Self {
+    pub fn from_lines(lines: Vec<String>, pos: Vec2, size: Vec2, line_num: bool) -> Self {
         Self {
             lines,
             cursor: Vec2::default(),
             offset: 0,
             size,
             pos,
+            line_num,
         }
     }
 
@@ -44,10 +47,12 @@ impl Buffer {
             vec![]
         };
 
-        Self::from_lines(lines, pos, size)
+        Self::from_lines(lines, pos, size, true)
     }
 
     pub fn render(&self, term: &mut impl Write) {
+        let line_num_size = self.lines.len().to_string().len();
+
         let mut row = 0;
         let mut col = 0;
         let mut cursor: Option<Vec2> = None;
@@ -59,14 +64,29 @@ impl Buffer {
             .take(self.size.y)
             .enumerate()
         {
+            let line_num = y + self.offset + 1;
+
+            let relative_line_num = match self.cursor.y.cmp(&(y + self.offset)) {
+                Ordering::Greater => self.cursor.y - (y + self.offset),
+                Ordering::Less => (y + self.offset) - self.cursor.y,
+                Ordering::Equal => line_num,
+            };
+
+            let line_num_str = format!(
+                "{:>width$}",
+                relative_line_num.to_string(),
+                width = line_num_size
+            );
+
             if line.is_empty() {
                 write!(
                     term,
-                    "{}{}",
+                    "{}{}{} ",
                     termion::cursor::Goto(
                         (self.pos.x + col + 1) as u16,
                         (self.pos.y + row + 1) as u16
                     ),
+                    line_num_str,
                     termion::clear::UntilNewline
                 )
                 .unwrap();
@@ -86,11 +106,25 @@ impl Buffer {
                     cursor = Some(Vec2::new(col, row));
                 }
 
+                if x == 0 && self.line_num {
+                    write!(
+                        term,
+                        "{}{} ",
+                        termion::cursor::Goto(
+                            (self.pos.x + col + 1) as u16,
+                            (self.pos.y + row + 1) as u16
+                        ),
+                        line_num_str
+                    )
+                    .unwrap();
+                }
+
                 write!(
                     term,
                     "{}{}",
                     termion::cursor::Goto(
-                        (self.pos.x + col + 1) as u16,
+                        ((if self.line_num { line_num_size + 1 } else { 0 }) + self.pos.x + col + 1)
+                            as u16,
                         (self.pos.y + row + 1) as u16
                     ),
                     c
@@ -117,7 +151,10 @@ impl Buffer {
                 term,
                 "{}",
                 termion::cursor::Goto(
-                    (self.pos.x + cursor.x + 1) as u16,
+                    ((if self.line_num { line_num_size + 1 } else { 0 })
+                        + self.pos.x
+                        + cursor.x
+                        + 1) as u16,
                     (self.pos.y + cursor.y + 1) as u16
                 )
             )

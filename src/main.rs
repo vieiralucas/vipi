@@ -85,6 +85,7 @@ impl State {
                         vec![":".to_string()],
                         Vec2::new(0, size.y),
                         Vec2::new(size.x, 1),
+                        false,
                     );
                     self.command_line.move_cursor_right(true);
                     self.mode = Mode::Command;
@@ -168,13 +169,13 @@ fn main() {
     let buffer = if let Some(file_path) = env::args().nth(1) {
         Buffer::from_file_path(&file_path, Vec2::new(0, 0), Vec2::new(size.x, size.y - 1))
     } else {
-        Buffer::from_lines(vec![], Vec2::new(0, 0), Vec2::new(size.x, size.y - 1))
+        Buffer::from_lines(vec![], Vec2::new(0, 0), Vec2::new(size.x, size.y - 1), true)
     };
 
     let mut state = State {
         buffer,
         mode: Mode::Normal,
-        command_line: Buffer::from_lines(vec![], Vec2::new(0, size.y), Vec2::new(size.x, 1)),
+        command_line: Buffer::from_lines(vec![], Vec2::new(0, size.y), Vec2::new(size.x, 1), false),
     };
 
     state.buffer.write_debug();
