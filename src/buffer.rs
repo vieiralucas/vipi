@@ -394,6 +394,7 @@ mod tests {
             offset: 0,
             pos: Vec2::default(),
             size: Vec2::new(100, 100),
+            line_num: true,
         };
 
         buffer.move_cursor_down();
@@ -409,6 +410,7 @@ mod tests {
             size: Vec2::new(100, 1),
             pos: Vec2::default(),
             offset: 0,
+            line_num: true,
         };
 
         buffer.move_cursor_down();
@@ -425,6 +427,7 @@ mod tests {
             size: Vec2::new(100, 100),
             pos: Vec2::default(),
             offset: 0,
+            line_num: true,
         };
 
         buffer.move_cursor_down();
@@ -440,6 +443,7 @@ mod tests {
             size: Vec2::new(100, 100),
             pos: Vec2::default(),
             offset: 0,
+            line_num: true,
         };
 
         buffer.move_cursor_up();
@@ -455,6 +459,7 @@ mod tests {
             offset: 0,
             size: Vec2::new(100, 100),
             pos: Vec2::default(),
+            line_num: true,
         };
 
         buffer.move_forward();
@@ -470,6 +475,7 @@ mod tests {
             offset: 0,
             size: Vec2::new(100, 100),
             pos: Vec2::default(),
+            line_num: true,
         };
 
         buffer.move_forward();
@@ -485,6 +491,7 @@ mod tests {
             offset: 0,
             size: Vec2::new(100, 100),
             pos: Vec2::default(),
+            line_num: true,
         };
 
         buffer.move_forward();
@@ -500,6 +507,7 @@ mod tests {
             offset: 0,
             size: Vec2::new(100, 1),
             pos: Vec2::default(),
+            line_num: true,
         };
 
         buffer.move_forward();
@@ -516,6 +524,7 @@ mod tests {
             size: Vec2::new(100, 100),
             pos: Vec2::default(),
             offset: 0,
+            line_num: true,
         };
 
         buffer.word_forward();
@@ -531,6 +540,7 @@ mod tests {
             size: Vec2::new(100, 100),
             pos: Vec2::default(),
             offset: 0,
+            line_num: true,
         };
 
         buffer.word_forward();
@@ -545,6 +555,7 @@ mod tests {
             size: Vec2::new(100, 100),
             pos: Vec2::default(),
             offset: 0,
+            line_num: true,
         };
 
         buffer.word_forward();
@@ -559,6 +570,7 @@ mod tests {
             size: Vec2::new(100, 100),
             pos: Vec2::default(),
             offset: 0,
+            line_num: true,
         };
 
         buffer.word_forward();
@@ -573,6 +585,7 @@ mod tests {
             size: Vec2::new(100, 100),
             pos: Vec2::default(),
             offset: 0,
+            line_num: true,
         };
 
         buffer.word_forward();
@@ -587,6 +600,7 @@ mod tests {
             size: Vec2::new(100, 100),
             pos: Vec2::default(),
             offset: 0,
+            line_num: true,
         };
 
         buffer.word_forward();
@@ -599,6 +613,7 @@ mod tests {
             size: Vec2::new(100, 100),
             pos: Vec2::default(),
             offset: 0,
+            line_num: true,
         };
 
         buffer.word_forward();
@@ -611,6 +626,7 @@ mod tests {
             size: Vec2::new(100, 100),
             pos: Vec2::default(),
             offset: 0,
+            line_num: true,
         };
 
         buffer.word_forward();
@@ -623,6 +639,7 @@ mod tests {
             size: Vec2::new(100, 100),
             pos: Vec2::default(),
             offset: 0,
+            line_num: true,
         };
 
         buffer.word_forward();
@@ -635,6 +652,7 @@ mod tests {
             size: Vec2::new(100, 100),
             pos: Vec2::default(),
             offset: 0,
+            line_num: true,
         };
 
         buffer.word_forward();
@@ -650,6 +668,7 @@ mod tests {
             size: Vec2::new(100, 100),
             pos: Vec2::default(),
             offset: 0,
+            line_num: true,
         };
 
         buffer.word_forward();
@@ -664,6 +683,7 @@ mod tests {
             size: Vec2::new(100, 100),
             pos: Vec2::default(),
             offset: 0,
+            line_num: true,
         };
 
         buffer.word_forward();
@@ -678,6 +698,7 @@ mod tests {
             size: Vec2::new(100, 100),
             pos: Vec2::default(),
             offset: 0,
+            line_num: true,
         };
 
         buffer.word_forward();
@@ -696,6 +717,7 @@ mod tests {
             size: Vec2::new(100, 1),
             pos: Vec2::default(),
             offset: 0,
+            line_num: true,
         };
 
         buffer.word_forward();
@@ -711,6 +733,7 @@ mod tests {
             size: Vec2::new(100, 1),
             pos: Vec2::default(),
             offset: 0,
+            line_num: true,
         };
 
         buffer.insert_char('a');
@@ -727,6 +750,7 @@ mod tests {
             size: Vec2::new(100, 1),
             pos: Vec2::default(),
             offset: 0,
+            line_num: true,
         };
 
         buffer.insert_char('a');
@@ -743,6 +767,7 @@ mod tests {
             size: Vec2::new(100, 1),
             pos: Vec2::default(),
             offset: 0,
+            line_num: true,
         };
 
         buffer.insert_line_after_cursor("hello".to_string());
@@ -763,6 +788,7 @@ mod tests {
             size: Vec2::new(100, 1),
             pos: Vec2::default(),
             offset: 0,
+            line_num: true,
         };
 
         buffer.insert_line_after_cursor("inserted".to_string());
@@ -783,6 +809,7 @@ mod tests {
             size: Vec2::new(100, 1),
             pos: Vec2::default(),
             offset: 0,
+            line_num: true,
         };
 
         buffer.insert_new_line();
@@ -799,6 +826,7 @@ mod tests {
             size: Vec2::new(100, 1),
             pos: Vec2::default(),
             offset: 0,
+            line_num: true,
         };
 
         buffer.insert_new_line();
@@ -819,6 +847,7 @@ mod tests {
             size: Vec2::new(100, 1),
             pos: Vec2::default(),
             offset: 0,
+            line_num: true,
         };
 
         buffer.insert_new_line();
@@ -835,6 +864,7 @@ mod tests {
             size: Vec2::new(100, 100),
             pos: Vec2::default(),
             offset: 0,
+            line_num: true,
         };
 
         buffer.join_line();
@@ -851,6 +881,7 @@ mod tests {
             size: Vec2::new(100, 100),
             pos: Vec2::default(),
             offset: 0,
+            line_num: true,
         };
 
         buffer.backspace();
@@ -867,6 +898,7 @@ mod tests {
             size: Vec2::new(100, 100),
             pos: Vec2::default(),
             offset: 0,
+            line_num: true,
         };
 
         buffer.backspace();
@@ -883,6 +915,7 @@ mod tests {
             size: Vec2::new(100, 100),
             pos: Vec2::default(),
             offset: 0,
+            line_num: true,
         };
 
         buffer.backspace();
