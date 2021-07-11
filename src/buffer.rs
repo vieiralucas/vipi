@@ -256,10 +256,12 @@ impl Buffer {
         if let Some(next_line) = self.lines.get(self.cursor.y + 1) {
             if self.current_line().is_empty() {
                 self.lines.remove(self.cursor.y);
+                self.cursor.x = self.current_line().len() - 1;
             } else {
-                let current_line = self.current_line();
+                let current_line = self.current_line().clone();
                 self.lines[self.cursor.y] = format!("{} {}", current_line, next_line);
                 self.lines.remove(self.cursor.y + 1);
+                self.cursor.x = current_line.len();
             }
         }
     }
@@ -295,6 +297,25 @@ impl Buffer {
 
         // TODO: report error to user instead of panic
         std::fs::write(file_path, file_contents).unwrap();
+    }
+
+    pub fn backspace(&mut self) {
+        let line = self.current_line().clone();
+        let x = self.cursor.x;
+        let y = self.cursor.y;
+
+        if x == 0 && y > 0 {
+            self.move_cursor_up();
+            self.join_line();
+        } else {
+            self.move_cursor_left();
+        }
+
+        self.delete_char();
+
+        if x >= line.len() {
+            self.move_cursor_right(true);
+        }
     }
 
     pub fn insert_new_line(&mut self) {
@@ -734,5 +755,69 @@ mod tests {
 
         assert_eq!(buffer.lines, vec!["before", "cursor", "_line", "after"]);
         assert_eq!(buffer.cursor, Vec2::new(0, 2));
+    }
+
+    #[test]
+    fn join_line() {
+        let mut buffer = Buffer {
+            lines: vec![
+                "line1".to_string(),
+                "line2".to_string()
+            ],
+            cursor: Vec2::new(0, 0),
+            size: Vec2::new(100, 100),
+            offset: 0,
+        };
+
+        buffer.join_line();
+
+        assert_eq!(buffer.lines, vec!["line1 line2"]);
+        assert_eq!(buffer.cursor, Vec2::new(5, 0));
+    }
+
+
+    #[test]
+    fn backspace_cursor_one_off() {
+        let mut buffer = Buffer {
+            lines: vec!["0123456".to_string()],
+            cursor: Vec2::new(7, 0),
+            size: Vec2::new(100, 100),
+            offset: 0,
+        };
+
+        buffer.backspace();
+
+        assert_eq!(buffer.lines, vec!["012345"]);
+        assert_eq!(buffer.cursor, Vec2::new(6, 0));
+    }
+
+    #[test]
+    fn backspace_cursor_middle() {
+        let mut buffer = Buffer {
+            lines: vec!["0123456".to_string()],
+            cursor: Vec2::new(5, 0),
+            size: Vec2::new(100, 100),
+            offset: 0,
+        };
+
+        buffer.backspace();
+
+        assert_eq!(buffer.lines, vec!["012356"]);
+        assert_eq!(buffer.cursor, Vec2::new(4, 0));
+    }
+
+    #[test]
+    fn backspace_cursor_start() {
+        let mut buffer = Buffer {
+            lines: vec!["0123".to_string(), "4567".to_string()],
+            cursor: Vec2::new(0, 1),
+            size: Vec2::new(100, 100),
+            offset: 0,
+        };
+
+        buffer.backspace();
+
+        assert_eq!(buffer.lines, vec!["01234567"]);
+        assert_eq!(buffer.cursor, Vec2::new(4, 0));
     }
 }
