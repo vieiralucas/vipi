@@ -10,6 +10,7 @@ pub struct Buffer {
     lines: Vec<String>,
     cursor: Vec2,
     offset: usize,
+    pos: Vec2,
     size: Vec2,
 }
 
@@ -21,19 +22,17 @@ enum MoveForwardOutcome {
 }
 
 impl Buffer {
-    pub fn from_lines(lines: Vec<String>) -> Self {
-        let mut size: Vec2 = termion::terminal_size().unwrap().into();
-        size.y -= 1;
-
+    pub fn from_lines(lines: Vec<String>, pos: Vec2, size: Vec2) -> Self {
         Self {
             lines,
             cursor: Vec2::default(),
             offset: 0,
             size,
+            pos,
         }
     }
 
-    pub fn from_file_path(file_path: &str) -> Self {
+    pub fn from_file_path(file_path: &str, pos: Vec2, size: Vec2) -> Self {
         let lines = if let Ok(mut file) = File::open(file_path) {
             let mut contents = String::new();
             file.read_to_string(&mut contents)
@@ -45,7 +44,7 @@ impl Buffer {
             vec![]
         };
 
-        Self::from_lines(lines)
+        Self::from_lines(lines, pos, size)
     }
 
     pub fn render(&self, term: &mut impl Write) {
@@ -64,7 +63,10 @@ impl Buffer {
                 write!(
                     term,
                     "{}{}",
-                    termion::cursor::Goto((col + 1) as u16, (row + 1) as u16),
+                    termion::cursor::Goto(
+                        (self.pos.x + col + 1) as u16,
+                        (self.pos.y + row + 1) as u16
+                    ),
                     termion::clear::UntilNewline
                 )
                 .unwrap();
@@ -87,7 +89,10 @@ impl Buffer {
                 write!(
                     term,
                     "{}{}",
-                    termion::cursor::Goto((col + 1) as u16, (row + 1) as u16),
+                    termion::cursor::Goto(
+                        (self.pos.x + col + 1) as u16,
+                        (self.pos.y + row + 1) as u16
+                    ),
                     c
                 )
                 .unwrap();
@@ -111,7 +116,10 @@ impl Buffer {
             write!(
                 term,
                 "{}",
-                termion::cursor::Goto((cursor.x + 1) as u16, (cursor.y + 1) as u16)
+                termion::cursor::Goto(
+                    (self.pos.x + cursor.x + 1) as u16,
+                    (self.pos.y + cursor.y + 1) as u16
+                )
             )
             .unwrap();
         }
@@ -340,7 +348,6 @@ impl Buffer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::CursorLine;
 
     #[test]
     fn move_cursor_down() {
@@ -348,6 +355,7 @@ mod tests {
             lines: vec!["line1".to_string(), "line2".to_string()],
             cursor: Vec2::default(),
             offset: 0,
+            pos: Vec2::default(),
             size: Vec2::new(100, 100),
         };
 
@@ -362,6 +370,7 @@ mod tests {
             lines: vec!["line1".to_string(), "line2".to_string()],
             cursor: Vec2::default(),
             size: Vec2::new(100, 1),
+            pos: Vec2::default(),
             offset: 0,
         };
 
@@ -377,6 +386,7 @@ mod tests {
             lines: vec!["big line".to_string(), "small".to_string()],
             cursor: Vec2::new(7, 0),
             size: Vec2::new(100, 100),
+            pos: Vec2::default(),
             offset: 0,
         };
 
@@ -391,6 +401,7 @@ mod tests {
             lines: vec!["small".to_string(), "big line".to_string()],
             cursor: Vec2::new(7, 1),
             size: Vec2::new(100, 100),
+            pos: Vec2::default(),
             offset: 0,
         };
 
@@ -406,6 +417,7 @@ mod tests {
             cursor: Vec2::default(),
             offset: 0,
             size: Vec2::new(100, 100),
+            pos: Vec2::default(),
         };
 
         buffer.move_forward();
@@ -420,6 +432,7 @@ mod tests {
             cursor: Vec2::new(2, 0),
             offset: 0,
             size: Vec2::new(100, 100),
+            pos: Vec2::default(),
         };
 
         buffer.move_forward();
@@ -434,6 +447,7 @@ mod tests {
             cursor: Vec2::new(4, 0),
             offset: 0,
             size: Vec2::new(100, 100),
+            pos: Vec2::default(),
         };
 
         buffer.move_forward();
@@ -448,6 +462,7 @@ mod tests {
             cursor: Vec2::new(4, 0),
             offset: 0,
             size: Vec2::new(100, 1),
+            pos: Vec2::default(),
         };
 
         buffer.move_forward();
@@ -462,6 +477,7 @@ mod tests {
             lines: vec!["Word Forward".to_string()],
             cursor: Vec2::default(),
             size: Vec2::new(100, 100),
+            pos: Vec2::default(),
             offset: 0,
         };
 
@@ -476,6 +492,7 @@ mod tests {
             lines: vec![" Word Forward".to_string()],
             cursor: Vec2::default(),
             size: Vec2::new(100, 100),
+            pos: Vec2::default(),
             offset: 0,
         };
 
@@ -489,6 +506,7 @@ mod tests {
             lines: vec!["  Word Forward".to_string()],
             cursor: Vec2::default(),
             size: Vec2::new(100, 100),
+            pos: Vec2::default(),
             offset: 0,
         };
 
@@ -502,6 +520,7 @@ mod tests {
             lines: vec![";Word Forward".to_string()],
             cursor: Vec2::default(),
             size: Vec2::new(100, 100),
+            pos: Vec2::default(),
             offset: 0,
         };
 
@@ -515,6 +534,7 @@ mod tests {
             lines: vec![";;Word Forward".to_string()],
             cursor: Vec2::default(),
             size: Vec2::new(100, 100),
+            pos: Vec2::default(),
             offset: 0,
         };
 
@@ -528,6 +548,7 @@ mod tests {
             lines: vec!["word1".to_string(), "word2".to_string()],
             cursor: Vec2::default(),
             size: Vec2::new(100, 100),
+            pos: Vec2::default(),
             offset: 0,
         };
 
@@ -539,6 +560,7 @@ mod tests {
             lines: vec!["word1".to_string(), " word2".to_string()],
             cursor: Vec2::default(),
             size: Vec2::new(100, 100),
+            pos: Vec2::default(),
             offset: 0,
         };
 
@@ -550,6 +572,7 @@ mod tests {
             lines: vec!["word1".to_string(), "".to_string()],
             cursor: Vec2::default(),
             size: Vec2::new(100, 100),
+            pos: Vec2::default(),
             offset: 0,
         };
 
@@ -561,6 +584,7 @@ mod tests {
             lines: vec!["word1 ".to_string(), "word2".to_string()],
             cursor: Vec2::default(),
             size: Vec2::new(100, 100),
+            pos: Vec2::default(),
             offset: 0,
         };
 
@@ -572,6 +596,7 @@ mod tests {
             lines: vec!["; ".to_string(), " word2".to_string()],
             cursor: Vec2::default(),
             size: Vec2::new(100, 100),
+            pos: Vec2::default(),
             offset: 0,
         };
 
@@ -586,6 +611,7 @@ mod tests {
             ],
             cursor: Vec2::default(),
             size: Vec2::new(100, 100),
+            pos: Vec2::default(),
             offset: 0,
         };
 
@@ -599,6 +625,7 @@ mod tests {
             lines: vec!["".to_string(), "word".to_string()],
             cursor: Vec2::default(),
             size: Vec2::new(100, 100),
+            pos: Vec2::default(),
             offset: 0,
         };
 
@@ -612,6 +639,7 @@ mod tests {
             lines: vec!["    }".to_string(), "}".to_string()],
             cursor: Vec2::default(),
             size: Vec2::new(100, 100),
+            pos: Vec2::default(),
             offset: 0,
         };
 
@@ -629,6 +657,7 @@ mod tests {
             ],
             cursor: Vec2::default(),
             size: Vec2::new(100, 1),
+            pos: Vec2::default(),
             offset: 0,
         };
 
@@ -643,6 +672,7 @@ mod tests {
             lines: vec!["".to_string()],
             cursor: Vec2::default(),
             size: Vec2::new(100, 1),
+            pos: Vec2::default(),
             offset: 0,
         };
 
@@ -658,6 +688,7 @@ mod tests {
             lines: vec!["".to_string()],
             cursor: Vec2::default(),
             size: Vec2::new(100, 1),
+            pos: Vec2::default(),
             offset: 0,
         };
 
@@ -673,6 +704,7 @@ mod tests {
             lines: vec!["".to_string()],
             cursor: Vec2::default(),
             size: Vec2::new(100, 1),
+            pos: Vec2::default(),
             offset: 0,
         };
 
@@ -692,6 +724,7 @@ mod tests {
             ],
             cursor: Vec2::new(2, 1),
             size: Vec2::new(100, 1),
+            pos: Vec2::default(),
             offset: 0,
         };
 
@@ -711,6 +744,7 @@ mod tests {
             ],
             cursor: Vec2::new(0, 1),
             size: Vec2::new(100, 1),
+            pos: Vec2::default(),
             offset: 0,
         };
 
@@ -722,13 +756,11 @@ mod tests {
 
     #[test]
     fn insert_new_line_end_of_current_line() {
-        let mut cursor_line = CursorLine::from_str("1", 0);
-        cursor_line.move_right(true);
-
         let mut buffer = Buffer {
             lines: vec!["before".to_string(), "1".to_string(), "after".to_string()],
             cursor: Vec2::new(1, 1),
             size: Vec2::new(100, 1),
+            pos: Vec2::default(),
             offset: 0,
         };
 
@@ -748,6 +780,7 @@ mod tests {
             ],
             cursor: Vec2::new(6, 1),
             size: Vec2::new(100, 1),
+            pos: Vec2::default(),
             offset: 0,
         };
 
@@ -760,12 +793,10 @@ mod tests {
     #[test]
     fn join_line() {
         let mut buffer = Buffer {
-            lines: vec![
-                "line1".to_string(),
-                "line2".to_string()
-            ],
+            lines: vec!["line1".to_string(), "line2".to_string()],
             cursor: Vec2::new(0, 0),
             size: Vec2::new(100, 100),
+            pos: Vec2::default(),
             offset: 0,
         };
 
@@ -775,13 +806,13 @@ mod tests {
         assert_eq!(buffer.cursor, Vec2::new(5, 0));
     }
 
-
     #[test]
     fn backspace_cursor_one_off() {
         let mut buffer = Buffer {
             lines: vec!["0123456".to_string()],
             cursor: Vec2::new(7, 0),
             size: Vec2::new(100, 100),
+            pos: Vec2::default(),
             offset: 0,
         };
 
@@ -797,6 +828,7 @@ mod tests {
             lines: vec!["0123456".to_string()],
             cursor: Vec2::new(5, 0),
             size: Vec2::new(100, 100),
+            pos: Vec2::default(),
             offset: 0,
         };
 
@@ -812,6 +844,7 @@ mod tests {
             lines: vec!["0123".to_string(), "4567".to_string()],
             cursor: Vec2::new(0, 1),
             size: Vec2::new(100, 100),
+            pos: Vec2::default(),
             offset: 0,
         };
 

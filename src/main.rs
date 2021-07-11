@@ -8,11 +8,9 @@ use termion::input::TermRead;
 use termion::raw::IntoRawMode;
 
 mod buffer;
-mod cursor_line;
 mod vec2;
 
 use buffer::Buffer;
-use cursor_line::CursorLine;
 use vec2::Vec2;
 
 #[derive(Debug, PartialEq)]
@@ -26,22 +24,13 @@ enum Mode {
 struct State {
     mode: Mode,
     buffer: Buffer,
-    command_line: CursorLine,
+    command_line: Buffer,
 }
 
 impl State {
     fn render(&self, term: &mut impl Write) {
         if self.mode == Mode::Command {
-            let (_, y) = termion::terminal_size().unwrap();
-
-            write!(
-                term,
-                "{}{}{}",
-                termion::cursor::Goto(1, y),
-                self.command_line.line(),
-                termion::clear::UntilNewline,
-            )
-            .unwrap();
+            self.command_line.render(term);
         } else {
             self.buffer.render(term);
         }
@@ -90,8 +79,14 @@ impl State {
                     self.mode = Mode::Insert;
                 }
                 Event::Key(Key::Char(':')) => {
-                    self.command_line = CursorLine::from_str(":", 0);
-                    self.command_line.move_right(true);
+                    let size: Vec2 = termion::terminal_size().unwrap().into();
+
+                    self.command_line = Buffer::from_lines(
+                        vec![":".to_string()],
+                        Vec2::new(0, size.y),
+                        Vec2::new(size.x, 1),
+                    );
+                    self.command_line.move_cursor_right(true);
                     self.mode = Mode::Command;
                 }
                 _ => {}
@@ -101,14 +96,14 @@ impl State {
                     self.mode = Mode::Normal;
                 }
                 Event::Key(Key::Backspace) => {
-                    if self.command_line.len() == 1 {
+                    if self.command_line.current_line().len() == 1 {
                         self.mode = Mode::Normal;
                     } else {
                         self.command_line.backspace();
                     }
                 }
                 Event::Key(Key::Char('\n')) => {
-                    let line = self.command_line.line();
+                    let line = self.command_line.current_line();
                     let command = line.trim();
 
                     if command == ":q!" {
@@ -168,16 +163,18 @@ fn main() {
     let stdin = stdin();
     let mut stdout = stdout().into_raw_mode().unwrap();
 
+    let size: Vec2 = termion::terminal_size().unwrap().into();
+
     let buffer = if let Some(file_path) = env::args().nth(1) {
-        Buffer::from_file_path(&file_path)
+        Buffer::from_file_path(&file_path, Vec2::new(0, 0), Vec2::new(size.x, size.y - 1))
     } else {
-        Buffer::from_lines(vec![])
+        Buffer::from_lines(vec![], Vec2::new(0, 0), Vec2::new(size.x, size.y - 1))
     };
 
     let mut state = State {
         buffer,
         mode: Mode::Normal,
-        command_line: CursorLine::from_str("", 0),
+        command_line: Buffer::from_lines(vec![], Vec2::new(0, size.y), Vec2::new(size.x, 1)),
     };
 
     state.buffer.write_debug();
